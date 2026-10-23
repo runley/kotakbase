@@ -4,6 +4,7 @@ import { parseRelease, releaseTags, audioLanguages, subLanguages, rankByLanguage
 import { LANGS, SIGNS } from './lang.js'
 import { fromMal, malAnime } from './mal.js'
 import { createSync } from './anilist-sync.js'
+import { openRoom, parseCode, formatCode } from './room.js'
 
 const $app = document.getElementById('app')
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
@@ -920,7 +921,7 @@ const autoPick = results => pickAuto(results)
 let hasMpv = false
 window.native.mpv.available().then(on => { hasMpv = on })
 const autoMpv = () => hasMpv && load('mpvAuto', true)
-const usesMpv = r => hasMpv && (load('player', 'builtin') === 'mpv' || (autoMpv() && unplayableAudio([...(r.titles ?? [r.title])])))
+const usesMpv = r => hasMpv && (load('player', 'builtin') === 'mpv' || (autoMpv() && unplayableAudio([...(r.titles ?? [r.title ?? ''])])))
 // a release that would play without sound
 const silent = r => !usesMpv(r) && unplayableAudio([...(r.titles ?? [r.title])])
 
@@ -960,6 +961,7 @@ function sourceCard (r, k, lastUsed) {
 }
 
 function sources (m, startEpisode) {
+  if (room && !room.isHost()) return notHost()
   const total = epCount(m)
   let episode = Math.min(Math.max(1, startEpisode), total)
   let results = []
@@ -1182,13 +1184,17 @@ function logWatched (m, episode, last) {
 // Numbers an episode goes by besides its own (for continued seasons), as the extensions and file matching use them
 const numberingOf = ids => ({ abs: ids.absoluteEpisodeNumber, tvdbSeason: ids.tvdbSeason, tvdbSeasonEpisode: ids.tvdbSeasonEpisode })
 
-async function play (m, episode, result, numbering, fileIndex) {
+// fromRoom: the Watch Together host picked this, so it plays here too
+async function play (m, episode, result, numbering, fileIndex, fromRoom = false) {
+  if (room && !room.isHost() && !fromRoom) return notHost()
   let logged = false // one history entry per playback
   rememberSource(m, result)
   if (fileIndex == null && PICK_FILE_FORMATS.includes(m.format)) {
     fileIndex = await chooseFile(m, result.link)
     if (fileIndex === null) return
   }
+  room?.played({ mediaId: m.id, episode, link: result.link, title: result.title, fileIndex, numbering })
+  const follower = !!room && !room.isHost() // the host moves everyone to the next episode
   const total = epCount(m)
   const prev = progress()[m.id]
   // Is the next episode in this same torrent (a season pack)? Then Next / the end of the episode plays it straight away,
@@ -1206,8 +1212,8 @@ async function play (m, episode, result, numbering, fileIndex) {
     fileIndex,
     numbering,
     resume: prev?.episode === episode ? prev.time : 0,
-    hasPrev: episode > 1,
-    hasNext: episode < total,
+    hasPrev: !follower && episode > 1,
+    hasNext: !follower && episode < total,
     onProgress: (time, duration) => {
       const watched = time > duration * 0.9
       const last = episode >= total
@@ -1229,6 +1235,120 @@ async function play (m, episode, result, numbering, fileIndex) {
     autoMpv: autoMpv()
   })
   findNext(false) // after player.play has sent its play request, which the main process answers this after
+}
+
+// ---- Watch Together ----
+let room = null // the room you're in, if any
+let roomError = ''
+const roomName = () => load('roomName', '') || `Guest ${Math.floor(100 + Math.random() * 900)}`
+
+async function enterRoom (code) {
+  if (room) return
+  const name = roomName()
+  save('roomName', name)
+  roomError = ''
+  try {
+    room = await openRoom({
+      code: code ?? undefined,
+      name,
+      getPlayer: player.current,
+      onChange: drawRoom,
+      onLoad: followHost
+    })
+    if (!code) room.claim()
+  } catch (e) {
+    roomError = `Couldn't start Watch Together: ${e.message}`
+  }
+  drawRoom()
+}
+
+// the host started something: play it here (the host's player is the clock, so it starts wherever they are)
+function followHost (l) {
+  document.querySelector('.src-modal')?.remove()
+  media(l.mediaId).then(m => play(m, l.episode, { link: l.link, title: l.title }, l.numbering ?? {}, l.fileIndex, true))
+    .catch(e => { roomError = `Couldn't open what the host is playing: ${e.message}`; drawRoom() })
+}
+
+function leaveRoom () {
+  room?.leave()
+  room = null
+  drawRoom()
+}
+
+async function notHost () {
+  if (await ask('The host picks what to watch', '<p>You\'re in a Watch Together room, so the host chooses the show, episode and source for everyone. Leave the room to watch something on your own.</p>', 'Leave room', 'Stay')) leaveRoom()
+}
+
+// the top bar's tab shows how many are in the room; the page redraws when someone joins, leaves or changes host
+function drawRoom () {
+  const tab = document.querySelector('[data-nav="together"]')
+  if (tab) tab.dataset.count = room ? room.members().length + 1 : ''
+  if (location.hash === '#/together') togetherPage()
+}
+
+const roomNow = {} // mediaId -> title, for "Now watching"
+function togetherPage () {
+  // redrawn whenever someone joins or leaves: keep what's being typed
+  const focused = document.activeElement?.matches?.('.together input') ? document.activeElement.dataset.field : null
+  const typed = Object.fromEntries([...$app.querySelectorAll('.together input[data-field]')].map(i => [i.dataset.field, i.value]))
+  if (!room) {
+    $app.innerHTML = `<div class="page together"><h2>Watch Together</h2>
+      <p class="muted lead">Watch with friends on other devices. The host picks the show, episode and source, and everyone's player follows: pausing, playing and seeking happen for everyone.</p>
+      <label class="field"><span>Your name</span><input data-field="name" maxlength="40" value="${esc(roomName())}"></label>
+      <div class="together-boxes">
+        <section class="box"><h3>Start a room</h3><p class="muted">You'll be the host. Share the room code with your friends.</p><button class="btn" data-create>Create room</button></section>
+        <section class="box"><h3>Join a room</h3><p class="muted">Enter the code someone shared with you.</p>
+          <form class="add" data-join><input data-field="code" placeholder="XXXX-XXXX-XXXX" aria-label="Room code" maxlength="20" autocomplete="off" spellcheck="false"><button class="btn">Join</button></form></section>
+      </div>
+      <p class="err">${esc(roomError)}</p></div>`
+  } else {
+    const people = [room.me, ...room.members()]
+    const status = p => p === room.me ? '' : !p.known ? 'Connecting…' : p.buffering ? 'Loading…' : ''
+    const l = room.load
+    if (l && !(l.mediaId in roomNow)) { roomNow[l.mediaId] = ''; media(l.mediaId).then(m => { roomNow[l.mediaId] = title(m); drawRoom() }, () => {}) }
+    const n = room.members().length
+    const net = room.net
+    $app.innerHTML = `<div class="page together"><h2>Watch Together</h2>
+      <section class="box room-head">
+        <div><span class="kicker">Room code</span><b class="room-code">${esc(formatCode(room.code))}</b></div>
+        <div class="actions"><button class="btn ghost" data-copy>Copy code</button><button class="btn ghost" data-leave>Leave room</button></div>
+      </section>
+      <p class="muted">${n ? `${n + 1} people in the room.` : net.trackers ? 'Waiting for others to join…' : 'Connecting…'}${room.isHost() ? ' You\'re the host: pick a show and episode as usual, and everyone here watches it with you.' : ''}</p>
+      <h3>Now watching</h3>
+      <p>${l ? `<a href="#/anime/${l.mediaId}">${esc(roomNow[l.mediaId] || 'Loading…')}</a> · Episode ${l.episode}` : '<span class="muted">Nothing yet. The host picks a show and episode as usual.</span>'}</p>
+      ${l && !room.isHost() && !player.current() ? '<div class="actions"><button class="btn" data-rejoin>Watch with the room</button></div>' : ''}
+      <h3>People</h3>
+      <ul class="people">${people.map(p => `<li>
+        <span class="avatar" aria-hidden="true">${esc((p.known === false ? '?' : p.name.trim()[0] || '?').toUpperCase())}</span>
+        <span class="person"><b>${esc(p.known === false ? 'Someone' : p.name)}${p === room.me ? ' <span class="muted">(you)</span>' : ''}</b>${status(p) ? `<span class="muted">${status(p)}</span>` : ''}</span>
+        ${p.id === room.host ? '<span class="badge host">Host</span>' : ''}
+        ${room.isHost() && p !== room.me && p.known ? `<button class="btn ghost" data-host="${esc(p.id)}">Make host</button>` : ''}
+      </li>`).join('')}</ul>
+      <p class="err">${esc(roomError)}</p></div>`
+  }
+  for (const [k, v] of Object.entries(typed)) { const i = $app.querySelector(`[data-field="${k}"]`); if (i) i.value = v }
+  if (focused) $app.querySelector(`[data-field="${focused}"]`)?.focus()
+  $app.onclick = e => {
+    if (e.target.closest('[data-create]')) return enterRoom(null)
+    if (e.target.closest('[data-leave]')) return leaveRoom()
+    if (e.target.closest('[data-copy]')) return navigator.clipboard.writeText(formatCode(room.code))
+    if (e.target.closest('[data-rejoin]')) return room.load && followHost(room.load)
+    const h = e.target.closest('[data-host]')
+    if (h) room.makeHost(h.dataset.host)
+  }
+  $app.onchange = e => {
+    if (e.target.dataset.field !== 'name') return
+    const n = e.target.value.trim().slice(0, 40)
+    if (!n) return
+    save('roomName', n)
+    room?.rename(n)
+  }
+  $app.onsubmit = e => {
+    e.preventDefault()
+    const code = parseCode($app.querySelector('[data-field="code"]').value)
+    if (!code) { roomError = 'That isn\'t a room code. It looks like XXXX-XXXX-XXXX.'; return togetherPage() }
+    enterRoom(code)
+  }
 }
 
 // ---- routing + shared clicks ----
@@ -1269,6 +1389,7 @@ async function route () {
     else if (name === 'settings') settingsPage()
     else if (name === 'history') await historyPage()
     else if (name === 'schedule') await schedulePage()
+    else if (name === 'together') togetherPage()
     else await home()
     // only once the new page is drawn: resetting earlier jumped the old page to its top while the new one loaded
     const scroll = history.state?.scroll ?? 0

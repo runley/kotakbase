@@ -134,6 +134,11 @@ function offerBuiltin (s, text) {
  * Open the player and stream `link`.
  * opts: { title, subtitle, skipTimes (duration => Promise<chapters>, used when the file has none), onTitle (title clicked), onEpisodes (episode line clicked), link, episode, numbering (optional: { abs, tvdbSeason, tvdbSeasonEpisode } for continued seasons), fileIndex (optional: play this file of the torrent), resume, hasPrev, hasNext, onProgress(time, duration), onPrev, onNext, onSources (pick another source for this episode), nextInTorrent (optional: true when the next episode is in this torrent, so it's kept loaded), player ('mpv' or 'builtin'), autoMpv (switch to mpv when the built-in player finds no audio it can play) }
  */
+// What's playing, for Watch Together: the video (or mpv's stand-in) and whether it's waiting for data
+// (from how much is loaded, not the waiting/playing events: those don't fire while paused, and Watch Together pauses
+// everyone until the last one has loaded enough)
+export const current = () => state && { video: state.video, buffering: state.mpv ? !!state.buffering : state.video.readyState < 3 }
+
 export async function play (opts) {
   const useMpv = opts.player === 'mpv'
   // the main process swaps torrents itself, which keeps a batch torrent loaded when moving to its next episode
@@ -211,8 +216,8 @@ export async function play (opts) {
     }
     loadChapters(s)
   }
-  video.onwaiting = () => { $('p-loading').textContent = 'Buffering…' }
-  video.onplaying = () => { $('p-loading').textContent = '' }
+  video.onwaiting = () => { s.buffering = true; $('p-loading').textContent = 'Buffering…' }
+  video.onplaying = () => { s.buffering = false; $('p-loading').textContent = '' }
   video.onerror = () => {
     const text = `Can't play this file (${video.error?.message || 'unsupported format'})`
     if (useMpv) offerBuiltin(s, text)
