@@ -1,0 +1,85 @@
+{
+  "name": "kotakbase",
+  "productName": "Kotakbase",
+  "version": "0.1.0-beta.6",
+  "description": "Stream anime torrents with Hayase-compatible extensions",
+  "main": "main.js",
+  "scripts": {
+    "test": "node --test",
+    "start": "electron .",
+    "prestart": "node scripts/vendor.mjs",
+    "dist": "node scripts/vendor.mjs && node scripts/notices.mjs && electron-builder --win nsis --publish never"
+  },
+  "keywords": [],
+  "author": "Kotakbase",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "bencode": "^4.0.1",
+    "ebml-stream": "^1.0.3",
+    "electron-updater": "^6.8.9",
+    "matroska-subtitles": "^3.3.2",
+    "webtorrent": "^3.0.21"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "jassub": "^2.5.20"
+  },
+  "build": {
+    "appId": "app.kotakbase",
+    "productName": "Kotakbase",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "episode.js",
+      "chapters.js",
+      "mpv.js",
+      "anilist-auth.js",
+      "ui/**/*",
+      "secrets.local.json",
+      "package.json",
+      "build/icon.png",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.txt"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Kotakbase",
+      "artifactName": "Kotakbase-Setup-${version}.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "vendor/mpv",
+        "to": "mpv",
+        "filter": [
+          "mpv.exe",
+          "d3dcompiler_43.dll"
+        ]
+      },
+      {
+        "from": "licenses",
+        "to": "licenses"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "runley",
+        "repo": "kotakbase"
+      }
+    ]
+  }
+}

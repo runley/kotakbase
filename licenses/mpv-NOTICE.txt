@@ -1,0 +1,17 @@
+Kotakbase ships mpv (https://mpv.io) as a separate program, mpv.exe, which it starts to play video in its "mpv"
+player mode. Kotakbase itself is not part of mpv and is licensed separately.
+
+mpv is free software licensed under the GNU General Public License, version 2 or later (GPLv2+); the full licence
+text is in mpv-GPL-2.0.txt next to this file. The build included here also contains FFmpeg, libass, libplacebo and
+other libraries under their own GPL/LGPL-compatible licences.
+
+Build shipped: mpv-x86_64-20261015-git-492bae0768 (mpv v0.41.0-1175-g492bae076), unmodified, from
+  https://github.com/shinchiro/mpv-winbuild-cmake/releases/tag/20261015
+
+Corresponding source code:
+  mpv:           https://github.com/mpv-player/mpv/tree/492bae0768f5e826991bf9fb222fa303371e8498
+  build scripts and the exact versions of every bundled library:
+                 https://github.com/shinchiro/mpv-winbuild-cmake (tag 20261015)
+
+On request, Kotakbase's maintainers will provide a copy of this source code for at least three years from
+distribution.
