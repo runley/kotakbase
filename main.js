@@ -1,4 +1,4 @@
-import { app, BaseWindow, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Tray } from 'electron'
+import { app, BaseWindow, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, shell, Tray } from 'electron'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -9,6 +9,7 @@ import { pickFile, findEpisode, VIDEO, RISKY } from './episode.js'
 import { readChapters } from './chapters.js'
 import { Mpv } from './mpv.js'
 import { setupAniList } from './anilist-auth.js'
+import { createDownloads } from './downloads.js'
 import updater from 'electron-updater'
 const { autoUpdater } = updater
 
@@ -67,10 +68,19 @@ const TRACKERS = [
 ]
 let win
 let tray
+// downloads for watching offline; the player never deletes or deselects a torrent these own
+const downloads = createDownloads({
+  client,
+  store: path.join(app.getPath('userData'), 'downloads.json'),
+  defaultDir: path.join(app.getPath('videos'), 'Kotakbase'),
+  trackers: TRACKERS,
+  isPlaying: t => current?.torrent === t,
+  onChange: list => send('downloads', list)
+})
 let quitting = false // closing the window only hides it (to the tray) unless the app is really quitting
 app.on('before-quit', () => { quitting = true })
 function showWindow () { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus() } }
-let current = null // { torrent, file, path, subs, mpv }
+let current = null // { torrent, file, path, subs, mpv }; a downloaded episode has no torrent, its file is read from disk
 
 // Serves the file that is currently playing, with Range support so the <video> can seek.
 const server = http.createServer((req, res) => {
@@ -130,7 +140,7 @@ async function loadTorrent (link) {
 async function dropBrowsing () {
   const t = browsing
   browsing = null
-  if (t && t !== current?.torrent && !t.destroyed) await client.remove(t, { destroyStore: true })
+  if (t && t !== current?.torrent && !t.destroyed && !downloads.owns(t)) await client.remove(t, { destroyStore: true })
 }
 
 // Video files in a torrent, for choosing an OVA/special/movie out of a pack. Nothing downloads until one is played.
@@ -148,23 +158,39 @@ ipcMain.handle('play', (_, link, episode, fileIndex, numbering, mpvMode) => {
   starting = run.catch(() => {})
   return run
 })
+// the stream that's playing is replaced: drop its torrent and files, unless it's a download's
+async function dropCurrent (keep) {
+  const t = current?.torrent
+  current = null
+  if (t && t !== keep && !downloads.owns(t)) await client.remove(t, { destroyStore: true })
+}
 async function startPlay (link, episode, fileIndex, numbering, mpvMode) {
   const existing = await client.get(link)
-  if (current && current.torrent !== existing) await client.remove(current.torrent, { destroyStore: true })
-  current = null
+  await dropCurrent(existing)
   if (browsing === existing) browsing = null
   else await dropBrowsing()
   const torrent = await loadTorrent(link)
   // checked on the file list alone, before anything downloads; a refused torrent is dropped
-  const refuse = async message => { await client.remove(torrent, { destroyStore: true }); throw new Error(message) }
+  const refuse = async message => { if (!downloads.owns(torrent)) await client.remove(torrent, { destroyStore: true }); throw new Error(message) }
   const risky = torrent.files.filter(f => RISKY.test(f.name)).map(f => f.name)
   if (risky.length) await refuse(`This torrent contains program files (${risky.slice(0, 3).join(', ')}), a common sign of a fake or malware, so it won't be played. Pick another source.`)
   if (!torrent.files.some(f => VIDEO.test(f.name))) await refuse("There's no video in this torrent. Pick another source.")
   const file = torrent.files[fileIndex] ?? pickFile(torrent.files, episode, numbering)
-  torrent.files.forEach(f => f !== file && f.deselect())
+  if (!downloads.owns(torrent)) torrent.files.forEach(f => f !== file && f.deselect()) // a download keeps fetching its other episodes
   file.select()
+  return serve(file, torrent, `${torrent.infoHash}/${torrent.files.indexOf(file)}`, mpvMode)
+}
+// a downloaded episode, straight from disk
+ipcMain.handle('play-download', async (_, id, index, mpvMode) => {
+  const file = downloads.local(id, index)
+  if (!file) throw new Error('This download is missing or not finished.')
+  await dropCurrent()
+  await dropBrowsing()
+  return serve(file, null, `local/${id}/${index}`, mpvMode)
+})
+function serve (file, torrent, key, mpvMode) {
   // a random token keeps a stale <video> request from a previous play from attaching to this one
-  current = { torrent, file, path: `/${torrent.infoHash}/${torrent.files.indexOf(file)}/${Date.now()}`, mpv: mpvMode }
+  current = { torrent, file, path: `/${key}/${Date.now()}`, mpv: mpvMode }
   // chapters sit in the MKV header before the video data, which is downloaded first anyway; [] for other formats
   const playing = current
   const chapters = /\.mkv$/i.test(file.name) ? readChapters(file.createReadStream({ start: 0, end: Math.min(file.length - 1, 32 * 1024 * 1024) })) : Promise.resolve([])
@@ -177,7 +203,7 @@ async function startPlay (link, episode, fileIndex, numbering, mpvMode) {
 // the playing file still comes first, since its pieces are the ones the player is reading.
 ipcMain.handle('next-file', async (_, link, episode, numbering, download) => {
   await starting
-  if (!current || current.torrent !== await client.get(link)) return null // that torrent isn't the one playing any more
+  if (!current?.torrent || current.torrent !== await client.get(link)) return null // that torrent isn't the one playing any more
   const file = findEpisode(current.torrent.files, episode, numbering)
   if (!file || file === current.file) return null
   if (download) file.select()
@@ -209,10 +235,22 @@ ipcMain.handle('scrape', async (_, hashes) => {
 
 // Player closed: drop the torrent (stops uploading) and delete its files, like Hayase does for a torrent no player uses.
 ipcMain.handle('stop', async () => {
-  if (!current) return
-  const { torrent } = current
-  current = null
-  await client.remove(torrent, { destroyStore: true })
+  await dropCurrent()
+  downloads.idle() // a finished download the player was reading can stop now, and waiting ones start
+})
+
+ipcMain.handle('downloads-list', () => downloads.list())
+// a torrent opened only to pick a file from it isn't playing: let the download take it over
+ipcMain.handle('downloads-add', async (_, spec) => { await dropBrowsing(); return downloads.add(spec) })
+ipcMain.handle('downloads-pause', (_, id) => downloads.pause(id))
+ipcMain.handle('downloads-resume', (_, id) => downloads.resume(id))
+ipcMain.handle('downloads-remove', (_, id, index) => downloads.remove(id, index))
+ipcMain.handle('downloads-dir', () => downloads.dir)
+ipcMain.handle('downloads-open', async () => { fs.mkdirSync(downloads.dir, { recursive: true }); await shell.openPath(downloads.dir) })
+ipcMain.handle('downloads-choose-dir', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Folder for downloads', defaultPath: downloads.dir, properties: ['openDirectory', 'createDirectory'] })
+  if (!r.canceled && r.filePaths[0]) downloads.setDir(r.filePaths[0])
+  return downloads.dir
 })
 
 // ---- mpv player mode ----
@@ -311,7 +349,7 @@ ipcMain.handle('fullscreen', (_, on) => win.setFullScreen(!!on))
 ipcMain.handle('focus', showWindow)
 
 setInterval(() => {
-  if (current) send('stats', { down: client.downloadSpeed, up: client.uploadSpeed, peers: current.torrent.numPeers, progress: current.file.progress })
+  if (current?.torrent) send('stats', { down: client.downloadSpeed, up: client.uploadSpeed, peers: current.torrent.numPeers, progress: current.file.progress }) // none for a download played from disk
 }, 1000)
 
 // Windows shows notifications only for an app with an id (the installer's appId). Dev runs get their own, or Windows
@@ -330,6 +368,9 @@ app.whenReady().then(() => {
       webSecurity: false
     }
   })
+  // KOTAKBASE_SCREEN=1 opens on the first screen other than the main one (test runs, kept out of the way of your work)
+  const other = screen.getAllDisplays().filter(d => d.id !== screen.getPrimaryDisplay().id)[Number(process.env.KOTAKBASE_SCREEN) - 1]
+  if (other) win.setBounds(other.workArea)
   win.loadFile(path.join(dir, 'ui', 'index.html'))
   // With "hide to tray" (Settings, on by default) closing only hides the window, so a mis-click mid-episode loses nothing
   // and new-episode checks keep running; Quit is then in the tray menu
@@ -356,6 +397,7 @@ app.whenReady().then(() => {
   })
   setTray(true) // until the page says what Settings has
   setupUpdates()
+  downloads.resumeAll()
 })
 // the page sends the setting at start and whenever it changes
 ipcMain.handle('close-to-tray', (_, on) => setTray(!!on))
@@ -397,6 +439,7 @@ ipcMain.handle('update-install', () => { if (update.status === 'ready') autoUpda
 app.on('will-quit', e => {
   e.preventDefault()
   // mpv also exits by itself if this process dies, since its window goes with it
+  downloads.persist() // how far each download got
   Promise.all([mpv?.quit(), new Promise(resolve => client.destroy(resolve))]).then(() => {
     wipeDownloads()
     if (update.status === 'ready') autoUpdater.install(true, false) // no-op if quitAndInstall already started it

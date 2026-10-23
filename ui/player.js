@@ -132,7 +132,7 @@ function offerBuiltin (s, text) {
 
 /**
  * Open the player and stream `link`.
- * opts: { title, subtitle, skipTimes (duration => Promise<chapters>, used when the file has none), onTitle (title clicked), onEpisodes (episode line clicked), link, episode, numbering (optional: { abs, tvdbSeason, tvdbSeasonEpisode } for continued seasons), fileIndex (optional: play this file of the torrent), resume, hasPrev, hasNext, onProgress(time, duration), onPrev, onNext, onSources (pick another source for this episode), nextInTorrent (optional: true when the next episode is in this torrent, so it's kept loaded), player ('mpv' or 'builtin'), autoMpv (switch to mpv when the built-in player finds no audio it can play) }
+ * opts: { local (optional: a downloaded episode, { id, index }, played from disk instead of the torrent), title, subtitle, skipTimes (duration => Promise<chapters>, used when the file has none), onTitle (title clicked), onEpisodes (episode line clicked), link, episode, numbering (optional: { abs, tvdbSeason, tvdbSeasonEpisode } for continued seasons), fileIndex (optional: play this file of the torrent), resume, hasPrev, hasNext, onProgress(time, duration), onPrev, onNext, onSources (pick another source for this episode), nextInTorrent (optional: true when the next episode is in this torrent, so it's kept loaded), player ('mpv' or 'builtin'), autoMpv (switch to mpv when the built-in player finds no audio it can play) }
  */
 // ---- Watch Together in the player: who's in the room, chat popping up over the video, and a box to answer ----
 let say = null // sends a chat message (set by the app while in a room)
@@ -180,7 +180,8 @@ export async function play (opts) {
   else window.native.mpv.quit() // one left idle by a previous episode in mpv mode
   $('p-title').textContent = opts.title
   $('p-ep').textContent = opts.subtitle
-  $('p-loading').textContent = 'Loading torrent…'
+  $('p-loading').textContent = opts.local ? 'Loading…' : 'Loading torrent…'
+  $root.querySelector('.p-stats').hidden = !!opts.local // no peers or speeds for a download played from disk
   $('p-subs').hidden = true
   $root.querySelector('[data-p=prev]').hidden = !opts.hasPrev
   $root.querySelector('[data-p=next]').hidden = !opts.hasNext
@@ -214,7 +215,8 @@ export async function play (opts) {
   // mpv starts while the torrent loads
   const mpvStarted = useMpv && window.native.mpv.open().then(() => null, e => e)
   let src
-  try { src = await window.native.play(opts.link, opts.episode, opts.fileIndex, opts.numbering, useMpv) } catch (e) {
+  // opts.local: a downloaded episode ({ id, index }), played from disk
+  try { src = await (opts.local ? window.native.downloads.play(opts.local.id, opts.local.index, useMpv) : window.native.play(opts.link, opts.episode, opts.fileIndex, opts.numbering, useMpv)) } catch (e) {
     if (state === s) $('p-loading').textContent = `Can't play this torrent: ${reason(e)}`
     return
   }

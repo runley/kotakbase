@@ -23,6 +23,18 @@ contextBridge.exposeInMainWorld('native', {
   focus: () => ipcRenderer.invoke('focus'),
   closeToTray: on => ipcRenderer.invoke('close-to-tray', on),
   // app updates from GitHub releases; changes arrive as on('update', state)
+  // downloads for watching offline; changes arrive as on('downloads', list)
+  downloads: {
+    list: () => ipcRenderer.invoke('downloads-list'),
+    add: spec => ipcRenderer.invoke('downloads-add', spec),
+    pause: id => ipcRenderer.invoke('downloads-pause', id),
+    resume: id => ipcRenderer.invoke('downloads-resume', id),
+    remove: (id, index) => ipcRenderer.invoke('downloads-remove', id, index),
+    play: (id, index, mpv) => ipcRenderer.invoke('play-download', id, index, mpv),
+    dir: () => ipcRenderer.invoke('downloads-dir'),
+    open: () => ipcRenderer.invoke('downloads-open'),
+    chooseDir: () => ipcRenderer.invoke('downloads-choose-dir')
+  },
   // Watch Together invite link the app was opened with (or arrives later as on('invite', code))
   takeInvite: () => ipcRenderer.invoke('take-invite'),
   update: {

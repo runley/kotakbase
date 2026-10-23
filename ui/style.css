@@ -436,3 +436,37 @@ body.navigating::after { content: ''; position: fixed; top: 0; left: 0; width: 3
 .p-chat div { background: rgba(15, 15, 16, .8); border-radius: 12px; padding: 6px 12px; font-size: 14px; overflow-wrap: anywhere; backdrop-filter: blur(6px); }
 .p-chat b { color: var(--accent); }
 #player.mini .p-room { display: none; }
+
+/* Downloads */
+.top-dl { height: 42px; min-width: 42px; padding: 0 12px; border-radius: 12px; background: var(--panel); color: #C9C8C2; display: flex; align-items: center; justify-content: center; gap: 6px; flex: none; font-weight: 700; font-size: 13px; }
+.top-dl:hover, .top-dl.active { color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.top-dl svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.top-dl span:empty { display: none; }
+.top-dl.busy { color: var(--on-accent); background: var(--accent); }
+.ep-dl { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: rgba(15, 15, 16, .8); color: var(--text); opacity: 0; transition: opacity .15s; cursor: pointer; }
+.epc { position: relative; }
+.epc:hover .ep-dl, .ep-dl.done, .ep-dl.busy, .ep-dl:focus-visible { opacity: 1; }
+.ep-dl:hover { background: var(--accent); color: var(--on-accent); }
+.ep-dl svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ep-dl.done { color: var(--accent); }
+.ep-dl.busy { width: auto; padding: 0 7px; }
+.ep-dl small { font-size: 11px; font-weight: 700; }
+.notice { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; max-width: min(560px, 90vw); padding: 12px 18px; background: var(--panel-2); border-radius: 14px; box-shadow: 0 8px 40px #000; font-weight: 600; }
+.downloads { max-width: 1000px; }
+.dl-show { display: flex; gap: 18px; align-items: flex-start; margin-top: 16px; }
+.dl-show > img { width: 92px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 12px; flex: none; }
+.dl-body { flex: 1; min-width: 0; }
+.dl-body h3 { margin: 0 0 8px; }
+.dl-torrent + .dl-torrent { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.dl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dl-head .muted { flex: 1; font-size: 13px; }
+.dl-file { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.dl-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dl-info .muted { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-info .meter { margin: 4px 0 0; }
+.dl-size { font-size: 12px; white-space: nowrap; }
+.dl-play { width: 36px; height: 36px; border-radius: 10px; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; cursor: pointer; flex: none; }
+.dl-play:disabled { background: var(--panel-2); color: var(--muted); cursor: default; }
+.dl-play svg { width: 16px; height: 16px; fill: currentColor; }
+.dl-x { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px 8px; border-radius: 8px; font-size: 14px; }
+.dl-x:hover { color: var(--text); background: var(--panel-2); }

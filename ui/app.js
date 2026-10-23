@@ -581,7 +581,7 @@ function episodeCards (m, zip, highlight) {
           ${len ? `<span class="len">${esc(len)}m</span>` : ''}${e.rating ? `<span class="rate">${esc(e.rating)}</span>` : ''}
         </div>
         <div class="body">
-          <b>${n}. ${esc(name)}</b>
+          <b>${n}. ${esc(name)}</b>${dlButton(m, n)}
           <div class="prog"><i style="width:${fill(n)}%"></i></div>
           <p>${esc(e.overview ?? e.summary ?? (movie ? (m.description ?? '').replace(/<[^>]+>/g, '') : ''))}</p>
           <small>${esc(ago(e.airDateUtc ?? e.airdate))}</small>
@@ -619,6 +619,7 @@ async function detail (id) {
       ${inContinueWatching(m) ? '<button class="sq" data-hide-continue title="Remove from Continue Watching" aria-label="Remove from Continue Watching"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>' : ''}
       ${!isFinished(m) && m.status !== 'NOT_YET_RELEASED' && !(p?.episode > airedCount(m)) ? `<button class="sq" data-watched-all title="Already watched: mark every episode watched" aria-label="Already watched"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>` : ''}
       ${p?.hidden && !isFinished(m) ? '<button class="sq" data-unhide title="Put back in Continue Watching" aria-label="Put back in Continue Watching"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button>' : ''}
+      <button class="sq" data-download-season title="Download episodes to watch offline" aria-label="Download episodes">${DL_ICON}</button>
       ${p ? ratingStars(m) : ''}
     </div>
     <div class="chips">
@@ -678,6 +679,9 @@ async function detail (id) {
       save('ratings', old === n ? rest : { ...rest, [m.id]: n }) // clicking your current rating clears it
       return rate.closest('.stars').replaceWith(document.createRange().createContextualFragment(ratingStars(m)))
     }
+    if (e.target.closest('[data-download-season]')) return sources(m, Math.min(current, epCount(m)), { download: 'season' })
+    const dl = e.target.closest('[data-dl-ep]')
+    if (dl) return sources(m, +dl.dataset.dlEp, { download: 'episode' })
     const b = e.target.closest('[data-ep]')
     if (b) sources(m, +b.dataset.ep)
   }
@@ -960,10 +964,13 @@ function sourceCard (r, k, lastUsed) {
   </button>`
 }
 
-function sources (m, startEpisode) {
-  if (room && !room.isHost()) return notHost()
+// opts.download: 'season' or 'episode' picks a source to download instead of playing; opts.stream skips a download
+function sources (m, startEpisode, opts = {}) {
+  if (room && !room.isHost() && !opts.download) return notHost()
   const total = epCount(m)
   let episode = Math.min(Math.max(1, startEpisode), total)
+  const have = !opts.download && !opts.stream && downloadedEpisode(m.id, episode)
+  if (have) return play(m, episode, { link: have.magnet, title: have.name, local: have }, {}, have.index)
   let results = []
   let numbering = {} // other numbers for this episode when the season continues another: series-wide and TVDB season/episode
   let searchId = 0
@@ -975,8 +982,9 @@ function sources (m, startEpisode) {
   modal.className = 'modal src-modal'
   modal.innerHTML = `<div class="src-box" role="dialog" aria-label="Select a source">
     <div class="src-head" style="background-image:url('${esc(m.bannerImage ?? m.coverImage.extraLarge)}')">
-      <h2>${esc(title(m))}</h2>
+      <h2>${opts.download ? 'Download: ' : ''}${esc(title(m))}</h2>
       <button class="src-close" data-close aria-label="Close">✕</button>
+      ${opts.download === 'season' ? '<p class="src-hint">Pick a batch (the folder icon) to download every episode out so far, or a single release for just this episode.</p>' : opts.download ? '<p class="src-hint">Pick a source to download this episode.</p>' : ''}
       <label class="src-filter"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
         <input placeholder="Filter by text, or paste a magnet link or torrent URL here to specify a torrent manually" aria-label="Filter or paste a magnet link"></label>
       <div class="src-opts">
@@ -992,7 +1000,7 @@ function sources (m, startEpisode) {
   const $ = sel => modal.querySelector(sel)
   const filter = $('.src-filter input')
   const autoBtn = $('.src-auto')
-  const choose = r => { modal.remove(); play(m, episode, r, numbering) }
+  const choose = r => { modal.remove(); opts.download ? startDownload(m, episode, r, opts.download) : play(m, episode, r, numbering) }
   // closed without picking: leave the fullscreen kept from the last episode, unless a player is still open
   const cancel = () => { modal.remove(); if (document.getElementById('player').hidden) player.exitFullscreen() }
 
@@ -1070,7 +1078,8 @@ function sources (m, startEpisode) {
   })
   modal.onclick = e => {
     if (e.target === modal || e.target.closest('[data-close]')) return cancel()
-    if (e.target.closest('.src-auto') && results[0]) return choose(autoPick(results))
+    // downloading a season: a batch first, if there is one
+    if (e.target.closest('.src-auto') && results[0]) return choose(opts.download === 'season' && results.some(r => r.type === 'batch') ? autoPick(results.filter(r => r.type === 'batch')) : autoPick(results))
     if (e.target.closest('[data-manual]')) return choose({ link: filter.value.trim() })
     const k = e.target.closest('[data-k]')?.dataset.k
     if (k != null) choose(results[k])
@@ -1113,6 +1122,8 @@ async function episodeDrawer (m, playing) {
   document.addEventListener('keydown', onKey, true)
   drawer.onclick = e => {
     if (e.target === drawer || e.target.closest('[data-close]')) return close()
+    const dl = e.target.closest('[data-dl-ep]')
+    if (dl) { close(); return sources(m, Number(dl.dataset.dlEp), { download: 'episode' }) }
     const b = e.target.closest('[data-ep]')
     if (b) { close(); sources(m, Number(b.dataset.ep)) }
   }
@@ -1194,6 +1205,7 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
     if (fileIndex === null) return
   }
   room?.played({ mediaId: m.id, episode, link: result.link, title: result.title, fileIndex, numbering })
+  const local = result.local ?? (fromRoom ? downloadedFile(result.link, fileIndex) : null)
   const follower = !!room && !room.isHost() // the host moves everyone to the next episode
   const total = epCount(m)
   const prev = progress()[m.id]
@@ -1229,13 +1241,179 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
     nextInTorrent: () => !!next,
     onTitle: () => { location.hash = `#/anime/${m.id}` },
     onEpisodes: () => episodeDrawer(m, episode),
-    onSources: () => sources(m, episode),
+    onSources: () => sources(m, episode, { stream: true }),
+    local,
     skipTimes: duration => aniSkip(m.idMal, episode, duration),
     player: usesMpv(result) ? 'mpv' : 'builtin',
     autoMpv: autoMpv()
   })
   findNext(false) // after player.play has sent its play request, which the main process answers this after
 }
+
+// ---- downloads (offline) ----
+let downloadList = [] // from the main process: [{ id, mediaId, title, cover, magnet, status, error, speed, peers, files: [{ index, episode, name, length, have, done, missing }] }]
+const DL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>'
+
+// a finished download of this episode, to play from disk
+function downloadedEpisode (mediaId, episode) {
+  for (const d of downloadList) {
+    const f = d.mediaId === mediaId && d.files.find(x => x.episode === episode && x.done && !x.missing)
+    if (f) return { id: d.id, index: f.index, magnet: d.magnet, name: f.name }
+  }
+  return null
+}
+// the same file of the same torrent, downloaded (a Watch Together host's pick you happen to have)
+function downloadedFile (link, index) {
+  const hash = String(link).match(/btih:([0-9a-f]{40})/i)?.[1]?.toLowerCase()
+  const d = hash && downloadList.find(x => x.id === hash)
+  const f = d?.files.find(x => x.index === index && x.done && !x.missing)
+  return f ? { id: d.id, index: f.index } : null
+}
+// an episode's download state, for its card: '' (none), 'done', or a percentage
+function episodeDownload (mediaId, episode) {
+  for (const d of downloadList) {
+    const f = d.mediaId === mediaId && d.files.find(x => x.episode === episode)
+    if (f) return f.done && !f.missing ? 'done' : `${Math.floor(f.have / f.length * 100)}%`
+  }
+  return ''
+}
+const dlButton = (m, n) => {
+  const s = episodeDownload(m.id, n)
+  return `<span class="ep-dl ${s === 'done' ? 'done' : s ? 'busy' : ''}" data-dl-ep="${n}" data-media="${m.id}" role="button" title="${s === 'done' ? 'Downloaded' : s ? `Downloading: ${s}` : 'Download this episode'}">${s === 'done' ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' : s ? `<small>${s}</small>` : DL_ICON}</span>`
+}
+
+const totals = list => {
+  const files = list.flatMap(d => d.files)
+  const active = list.filter(d => d.status === 'active' || d.status === 'waiting')
+  const want = active.flatMap(d => d.files)
+  return { done: files.filter(f => f.done && !f.missing).length, active: active.length, pct: want.length ? Math.floor(want.reduce((a, f) => a + Math.min(f.have, f.length), 0) / want.reduce((a, f) => a + f.length, 0) * 100) : 0 }
+}
+function onDownloads (list) {
+  downloadList = list
+  const t = totals(list)
+  const pill = document.getElementById('dl-pill')
+  pill.textContent = t.active ? `${t.pct}%` : t.done ? String(t.done) : ''
+  pill.parentElement.classList.toggle('busy', !!t.active)
+  pill.parentElement.title = t.active ? `Downloading: ${t.pct}%` : t.done ? `${t.done} episodes downloaded` : 'Downloads'
+  // episode cards on a show page: their download buttons follow along
+  for (const el of document.querySelectorAll('[data-dl-ep]')) {
+    const fresh = document.createRange().createContextualFragment(dlButton({ id: +el.dataset.media }, +el.dataset.dlEp)).firstChild
+    if (fresh.outerHTML !== el.outerHTML) el.replaceWith(fresh)
+  }
+  if (location.hash === '#/downloads') downloadsPage(true)
+}
+window.native.downloads.list().then(onDownloads)
+window.native.on('downloads', onDownloads)
+
+async function startDownload (m, episode, r, mode) {
+  // a season pack, from the show's Download button: every episode out so far; otherwise the one episode
+  const season = mode === 'season' && r.type === 'batch'
+  const eps = season ? Array.from({ length: airedCount(m) }, (_, k) => k + 1) : [episode]
+  let fileIndex
+  if (!season && PICK_FILE_FORMATS.includes(m.format)) {
+    fileIndex = await chooseFile(m, r.link)
+    if (fileIndex === null) return
+  }
+  const episodes = await Promise.all(eps.map(async e => ({ episode: e, numbering: numberingOf(await mappings(m.id, e)) })))
+  try {
+    const res = await window.native.downloads.add({ mediaId: m.id, title: title(m), cover: m.coverImage.extraLarge, link: r.link, episodes, fileIndex })
+    rememberSource(m, r)
+    notice(res.waiting ? 'That torrent is playing right now, so its download starts when you close the player.' : `Downloading ${res.episodes === 1 ? '1 episode' : `${res.episodes} episodes`}. See them under Downloads.`)
+  } catch (e) {
+    notice(`Couldn't download: ${e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, '')}`)
+  }
+}
+
+// a short message at the bottom of the window
+function notice (text) {
+  const el = document.createElement('div')
+  el.className = 'notice'
+  el.setAttribute('role', 'status')
+  el.textContent = text
+  document.body.append(el)
+  setTimeout(() => el.remove(), 5000)
+}
+
+let downloadsShape = ''
+function downloadsPage (update = false) {
+  const list = downloadList
+  // redrawn every second while downloading: just the numbers, unless entries came or went (so clicks aren't lost)
+  const shape = JSON.stringify(list.map(d => [d.id, d.status, d.error, d.files.map(f => [f.index, f.done, f.missing])]))
+  if (update && shape === downloadsShape && $app.querySelector('.downloads')) {
+    for (const d of list) {
+      const s = $app.querySelector(`[data-dl-stat="${d.id}"]`)
+      if (s) s.textContent = statusText(d)
+      for (const f of d.files) {
+        const bar = $app.querySelector(`[data-dl-bar="${d.id}:${f.index}"]`)
+        if (bar) bar.style.width = `${Math.min(100, f.have / f.length * 100)}%`
+        const t = $app.querySelector(`[data-dl-size="${d.id}:${f.index}"]`)
+        if (t) t.textContent = fileText(f)
+      }
+    }
+    return
+  }
+  downloadsShape = shape
+  const shows = [...new Set(list.map(d => d.mediaId))]
+  $app.innerHTML = `<div class="page downloads"><h2>Downloads</h2>
+    <p class="muted">Episodes you download play from your computer, without internet. <span class="dl-dir"></span></p>
+    <div class="actions"><button class="btn ghost" data-dl-open>Open folder</button><button class="btn ghost" data-dl-dir>Change folder</button></div>
+    ${shows.length ? shows.map(id => {
+      const items = list.filter(d => d.mediaId === id)
+      return `<section class="box dl-show">
+        <img src="${esc(items[0].cover)}" alt="">
+        <div class="dl-body">
+          <h3><a href="#/anime/${id}">${esc(items[0].title)}</a></h3>
+          ${items.map(d => `<div class="dl-torrent">
+            <div class="dl-head"><span class="muted" data-dl-stat="${d.id}">${esc(statusText(d))}</span>
+              ${d.status === 'active' ? `<button class="btn ghost" data-dl-pause="${d.id}">Pause</button>` : ['paused', 'error'].includes(d.status) ? `<button class="btn ghost" data-dl-resume="${d.id}">Resume</button>` : ''}
+              <button class="btn ghost" data-dl-del="${d.id}">Delete</button></div>
+            ${d.files.map(f => `<div class="dl-file">
+              <button class="dl-play" data-dl-play="${d.id}:${f.index}" ${f.done && !f.missing ? '' : 'disabled'} aria-label="Play episode ${f.episode ?? ''}"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg></button>
+              <div class="dl-info"><b>${f.episode ? `Episode ${f.episode}` : esc(f.name)}</b><span class="muted" title="${esc(f.name)}">${esc(f.name)}</span>
+                <div class="meter"><i data-dl-bar="${d.id}:${f.index}" style="width:${Math.min(100, f.have / f.length * 100)}%"></i></div></div>
+              <span class="muted dl-size" data-dl-size="${d.id}:${f.index}">${esc(fileText(f))}</span>
+              <button class="dl-x" data-dl-del="${d.id}:${f.index}" aria-label="Delete this episode" title="Delete this episode">✕</button>
+            </div>`).join('')}
+          </div>`).join('')}
+        </div></section>`
+    }).join('') : '<p class="muted">Nothing downloaded yet. On a show\'s page, use the download button next to Watch for a whole season, or the one on an episode for just that episode.</p>'}
+  </div>`
+  window.native.downloads.dir().then(d => { const el = $app.querySelector('.dl-dir'); if (el) el.textContent = `Saved in ${d}.` })
+  $app.onclick = async e => {
+    const b = e.target.closest('button')
+    if (!b) return
+    const d = b.dataset
+    if (d.dlOpen != null) return window.native.downloads.open()
+    if (d.dlDir != null) return window.native.downloads.chooseDir().then(dir => { $app.querySelector('.dl-dir').textContent = `New downloads go to ${dir}.` })
+    if (d.dlPause) return window.native.downloads.pause(d.dlPause)
+    if (d.dlResume) return window.native.downloads.resume(d.dlResume)
+    if (d.dlPlay) {
+      const [id, index] = d.dlPlay.split(':')
+      const item = downloadList.find(x => x.id === id)
+      const f = item?.files.find(x => x.index === +index)
+      if (!f) return
+      const m = await media(item.mediaId).catch(() => null)
+      if (!m) return notice('Couldn\'t load this show\'s details, which the player needs. Try again when you\'re online.')
+      return play(m, f.episode ?? 1, { link: item.magnet, title: f.name, local: { id, index: +index } }, {}, +index)
+    }
+    if (d.dlDel) {
+      const [id, index] = d.dlDel.split(':')
+      const item = downloadList.find(x => x.id === id)
+      const f = index != null && item?.files.find(x => x.index === +index)
+      const what = f ? (f.episode ? `episode ${f.episode}` : f.name) : `${item.files.length === 1 ? 'this episode' : `these ${item.files.length} episodes`} of ${item.title}`
+      if (await ask('Delete download?', `<p>The video file${f || item.files.length === 1 ? '' : 's'} for ${esc(what)} will be deleted from your computer.</p>`, 'Delete')) window.native.downloads.remove(id, index == null ? undefined : +index)
+    }
+  }
+}
+function statusText (d) {
+  const left = d.files.filter(f => !f.done).length
+  if (d.status === 'waiting') return 'Starts when you close the player'
+  if (d.status === 'paused') return `Paused · ${left} to go`
+  if (d.status === 'error') return `Stopped: ${d.error}`
+  if (d.status === 'done') return d.files.some(f => f.missing) ? 'Some files were deleted outside Kotakbase' : 'Downloaded'
+  return `Downloading · ${(d.speed / 1e6).toFixed(1)} MB/s · ${d.peers} peers · ${left} to go`
+}
+const fileText = f => f.missing ? 'File missing' : f.done ? size(f.length) : `${size(Math.min(f.have, f.length))} of ${size(f.length)}`
 
 // ---- Watch Together ----
 let room = null // the room you're in, if any
@@ -1434,6 +1612,7 @@ async function route () {
     else if (name === 'history') await historyPage()
     else if (name === 'schedule') await schedulePage()
     else if (name === 'together') togetherPage()
+    else if (name === 'downloads') downloadsPage()
     else await home()
     // only once the new page is drawn: resetting earlier jumped the old page to its top while the new one loaded
     const scroll = history.state?.scroll ?? 0
