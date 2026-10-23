@@ -34,7 +34,18 @@ process.on('uncaughtException', err => {
 })
 // One running copy per profile, so two instances never fight over the download folder; a second launch focuses the first.
 if (!app.requestSingleInstanceLock()) process.exit(0)
-app.on('second-instance', () => showWindow())
+// Watch Together invite links (kotakbase://join/CODE): Windows starts Kotakbase with the link as an argument, or hands
+// it to the running one here. Only the room code is taken from it; the page asks before leaving a room it's in.
+let invite = null
+const takeInvite = argv => {
+  const code = argv.map(a => String(a).match(/^kotakbase:\/\/join\/([A-Za-z0-9-]{12,20})\/?$/i)?.[1]).find(Boolean)
+  if (code) invite = code
+  return code
+}
+if (app.isPackaged) app.setAsDefaultProtocolClient('kotakbase') // the installed app only: a dev run would take the links over
+takeInvite(process.argv)
+ipcMain.handle('take-invite', () => { const c = invite; invite = null; return c })
+app.on('second-instance', (_, argv) => { showWindow(); if (takeInvite(argv)) send('invite', invite) })
 
 // Streams are throwaway: the previous torrent's files are deleted when another one starts, and the folder is wiped on start/quit.
 const downloadPath = path.join(app.getPath('userData'), 'stream-cache')

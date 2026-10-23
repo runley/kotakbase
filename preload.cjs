@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('native', {
   focus: () => ipcRenderer.invoke('focus'),
   closeToTray: on => ipcRenderer.invoke('close-to-tray', on),
   // app updates from GitHub releases; changes arrive as on('update', state)
+  // Watch Together invite link the app was opened with (or arrives later as on('invite', code))
+  takeInvite: () => ipcRenderer.invoke('take-invite'),
   update: {
     state: () => ipcRenderer.invoke('update-state'),
     check: () => ipcRenderer.invoke('update-check'),

@@ -1241,6 +1241,7 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
 let room = null // the room you're in, if any
 let roomError = ''
 const roomName = () => load('roomName', '') || `Guest ${Math.floor(100 + Math.random() * 900)}`
+const inviteLink = code => `kotakbase://join/${formatCode(code)}`
 
 async function enterRoom (code) {
   if (room) return
@@ -1253,7 +1254,9 @@ async function enterRoom (code) {
       name,
       getPlayer: player.current,
       onChange: drawRoom,
-      onLoad: followHost
+      onLoad: followHost,
+      // others' messages pop up over the video too
+      onChat: msg => { if (!msg.mine && player.current()) player.roomMessage(msg.name, msg.text) }
     })
     if (!code) room.claim()
   } catch (e) {
@@ -1279,26 +1282,43 @@ async function notHost () {
   if (await ask('The host picks what to watch', '<p>You\'re in a Watch Together room, so the host chooses the show, episode and source for everyone. Leave the room to watch something on your own.</p>', 'Leave room', 'Stay')) leaveRoom()
 }
 
-// the top bar's tab shows how many are in the room; the page redraws when someone joins, leaves or changes host
+// An invite link opened Kotakbase (or reached it while running): join that room, asking first if you're in another
+async function joinInvite (text) {
+  const code = text && parseCode(text)
+  if (!code) return
+  if (location.hash !== '#/together') location.hash = '#/together'
+  if (room?.code === code) return
+  if (room && !await ask('Join another room?', `<p>You're in room ${esc(formatCode(room.code))}. Leave it and join ${esc(formatCode(code))}?</p>`, 'Join', 'Stay')) return
+  leaveRoom()
+  enterRoom(code)
+}
+window.native.takeInvite().then(joinInvite)
+window.native.on('invite', () => window.native.takeInvite().then(joinInvite))
+
+// the top bar's tab and the player show who's in the room; the page redraws when anything changes
 function drawRoom () {
   const tab = document.querySelector('[data-nav="together"]')
   if (tab) tab.dataset.count = room ? room.members().length + 1 : ''
+  const hostName = room && (room.isHost() ? 'you\'re the host' : `host: ${room.members().find(p => p.id === room.host)?.name ?? '…'}`)
+  player.room(room && `${room.members().length + 1} watching · ${hostName}`, text => room?.say(text))
   if (location.hash === '#/together') togetherPage()
 }
 
 const roomNow = {} // mediaId -> title, for "Now watching"
+const clock = at => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 function togetherPage () {
-  // redrawn whenever someone joins or leaves: keep what's being typed
+  // redrawn whenever someone joins, leaves or writes: keep what's being typed, and the chat scrolled to the end
   const focused = document.activeElement?.matches?.('.together input') ? document.activeElement.dataset.field : null
   const typed = Object.fromEntries([...$app.querySelectorAll('.together input[data-field]')].map(i => [i.dataset.field, i.value]))
+  const nameField = `<label class="field"><span>Your name</span><input data-field="name" maxlength="40" value="${esc(room?.me.name ?? roomName())}"></label>`
   if (!room) {
     $app.innerHTML = `<div class="page together"><h2>Watch Together</h2>
       <p class="muted lead">Watch with friends on other devices. The host picks the show, episode and source, and everyone's player follows: pausing, playing and seeking happen for everyone.</p>
-      <label class="field"><span>Your name</span><input data-field="name" maxlength="40" value="${esc(roomName())}"></label>
+      ${nameField}
       <div class="together-boxes">
-        <section class="box"><h3>Start a room</h3><p class="muted">You'll be the host. Share the room code with your friends.</p><button class="btn" data-create>Create room</button></section>
-        <section class="box"><h3>Join a room</h3><p class="muted">Enter the code someone shared with you.</p>
-          <form class="add" data-join><input data-field="code" placeholder="XXXX-XXXX-XXXX" aria-label="Room code" maxlength="20" autocomplete="off" spellcheck="false"><button class="btn">Join</button></form></section>
+        <section class="box"><h3>Start a room</h3><p class="muted">You'll be the host. Share the invite link or the room code with your friends.</p><button class="btn" data-create>Create room</button></section>
+        <section class="box"><h3>Join a room</h3><p class="muted">Open the invite link someone shared, or enter their room code.</p>
+          <form class="add" data-join><input data-field="code" placeholder="XXXX-XXXX-XXXX" aria-label="Room code" maxlength="40" autocomplete="off" spellcheck="false"><button class="btn">Join</button></form></section>
       </div>
       <p class="err">${esc(roomError)}</p></div>`
   } else {
@@ -1307,31 +1327,49 @@ function togetherPage () {
     const l = room.load
     if (l && !(l.mediaId in roomNow)) { roomNow[l.mediaId] = ''; media(l.mediaId).then(m => { roomNow[l.mediaId] = title(m); drawRoom() }, () => {}) }
     const n = room.members().length
-    const net = room.net
+    const chat = room.chat()
     $app.innerHTML = `<div class="page together"><h2>Watch Together</h2>
       <section class="box room-head">
         <div><span class="kicker">Room code</span><b class="room-code">${esc(formatCode(room.code))}</b></div>
-        <div class="actions"><button class="btn ghost" data-copy>Copy code</button><button class="btn ghost" data-leave>Leave room</button></div>
+        <div class="actions"><button class="btn" data-copy="link">Copy invite link</button><button class="btn ghost" data-copy="code">Copy code</button><button class="btn ghost" data-leave>Leave room</button></div>
       </section>
-      <p class="muted">${n ? `${n + 1} people in the room.` : net.trackers ? 'Waiting for others to join…' : 'Connecting…'}${room.isHost() ? ' You\'re the host: pick a show and episode as usual, and everyone here watches it with you.' : ''}</p>
-      <h3>Now watching</h3>
-      <p>${l ? `<a href="#/anime/${l.mediaId}">${esc(roomNow[l.mediaId] || 'Loading…')}</a> · Episode ${l.episode}` : '<span class="muted">Nothing yet. The host picks a show and episode as usual.</span>'}</p>
-      ${l && !room.isHost() && !player.current() ? '<div class="actions"><button class="btn" data-rejoin>Watch with the room</button></div>' : ''}
-      <h3>People</h3>
-      <ul class="people">${people.map(p => `<li>
-        <span class="avatar" aria-hidden="true">${esc((p.known === false ? '?' : p.name.trim()[0] || '?').toUpperCase())}</span>
-        <span class="person"><b>${esc(p.known === false ? 'Someone' : p.name)}${p === room.me ? ' <span class="muted">(you)</span>' : ''}</b>${status(p) ? `<span class="muted">${status(p)}</span>` : ''}</span>
-        ${p.id === room.host ? '<span class="badge host">Host</span>' : ''}
-        ${room.isHost() && p !== room.me && p.known ? `<button class="btn ghost" data-host="${esc(p.id)}">Make host</button>` : ''}
-      </li>`).join('')}</ul>
+      <p class="muted">${n ? `${n + 1} people in the room.` : room.net.trackers ? 'Waiting for others to join…' : 'Connecting…'}${room.isHost() ? ' You\'re the host: pick a show and episode as usual, and everyone here watches it with you.' : ''}</p>
+      <div class="room-grid">
+        <div>
+          <h3>Now watching</h3>
+          <p>${l ? `<a href="#/anime/${l.mediaId}">${esc(roomNow[l.mediaId] || 'Loading…')}</a> · Episode ${l.episode}` : '<span class="muted">Nothing yet. The host picks a show and episode as usual.</span>'}</p>
+          ${l && !room.isHost() && !player.current() ? '<div class="actions"><button class="btn" data-rejoin>Watch with the room</button></div>' : ''}
+          <h3>People</h3>
+          <ul class="people">${people.map(p => `<li>
+            <span class="avatar" aria-hidden="true">${esc((p.known === false ? '?' : p.name.trim()[0] || '?').toUpperCase())}</span>
+            <span class="person"><b>${esc(p.known === false ? 'Someone' : p.name)}${p === room.me ? ' <span class="muted">(you)</span>' : ''}</b>${status(p) ? `<span class="muted">${status(p)}</span>` : ''}</span>
+            ${p.id === room.host ? '<span class="badge host">Host</span>' : ''}
+            ${room.isHost() && p !== room.me && p.known ? `<button class="btn ghost" data-host="${esc(p.id)}">Make host</button>` : ''}
+          </li>`).join('')}</ul>
+          ${nameField}
+        </div>
+        <section class="box room-chat" aria-label="Chat">
+          <h3>Chat</h3>
+          <div class="chat-log">${chat.map(c => `<p class="${c.mine ? 'mine' : ''}"><b>${esc(c.name)}</b> <time>${clock(c.at)}</time><span>${esc(c.text)}</span></p>`).join('') || '<p class="muted">No messages yet. While watching, the people icon at the top of the player opens a box to write in.</p>'}</div>
+          <form class="add" data-chat><input data-field="chat" maxlength="300" placeholder="Say something…" aria-label="Message the room" autocomplete="off"><button class="btn">Send</button></form>
+        </section>
+      </div>
       <p class="err">${esc(roomError)}</p></div>`
+    const log = $app.querySelector('.chat-log')
+    log.scrollTop = log.scrollHeight
   }
   for (const [k, v] of Object.entries(typed)) { const i = $app.querySelector(`[data-field="${k}"]`); if (i) i.value = v }
   if (focused) $app.querySelector(`[data-field="${focused}"]`)?.focus()
   $app.onclick = e => {
     if (e.target.closest('[data-create]')) return enterRoom(null)
     if (e.target.closest('[data-leave]')) return leaveRoom()
-    if (e.target.closest('[data-copy]')) return navigator.clipboard.writeText(formatCode(room.code))
+    const copy = e.target.closest('[data-copy]')
+    if (copy) {
+      navigator.clipboard.writeText(copy.dataset.copy === 'link' ? inviteLink(room.code) : formatCode(room.code))
+      const label = copy.textContent
+      copy.textContent = 'Copied'
+      return setTimeout(() => { copy.textContent = label }, 1500)
+    }
     if (e.target.closest('[data-rejoin]')) return room.load && followHost(room.load)
     const h = e.target.closest('[data-host]')
     if (h) room.makeHost(h.dataset.host)
@@ -1345,7 +1383,13 @@ function togetherPage () {
   }
   $app.onsubmit = e => {
     e.preventDefault()
-    const code = parseCode($app.querySelector('[data-field="code"]').value)
+    if (e.target.matches('[data-chat]')) {
+      const input = e.target.querySelector('input')
+      const text = input.value
+      input.value = '' // before saying it: saying redraws the page, which keeps what's typed
+      return room?.say(text)
+    }
+    const code = parseCode($app.querySelector('[data-field="code"]').value.replace(/^kotakbase:\/\/join\//i, ''))
     if (!code) { roomError = 'That isn\'t a room code. It looks like XXXX-XXXX-XXXX.'; return togetherPage() }
     enterRoom(code)
   }

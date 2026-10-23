@@ -403,7 +403,7 @@ body.navigating::after { content: ''; position: fixed; top: 0; left: 0; width: 3
 .together .field input, .together form input { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; color: var(--text); font: inherit; }
 .together-boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .together-boxes h3 { margin-top: 0; }
-.together form input { letter-spacing: 1px; text-transform: uppercase; }
+.together [data-join] input { letter-spacing: 1px; text-transform: uppercase; }
 .room-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .room-head .actions { margin: 0; }
 .room-code { display: block; margin-top: 8px; font: 800 28px var(--display); letter-spacing: 2px; }
@@ -414,3 +414,25 @@ body.navigating::after { content: ''; position: fixed; top: 0; left: 0; width: 3
 .people .person .muted { font-size: 12px; }
 .badge.host { background: var(--accent); color: var(--on-accent); }
 .tabs a[data-count]:not([data-count=""])::after { content: attr(data-count); margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 800; }
+.room-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 24px; align-items: start; }
+@media (max-width: 860px) { .room-grid { grid-template-columns: 1fr; } }
+.together { max-width: 1100px; }
+.room-chat { display: flex; flex-direction: column; gap: 10px; }
+.room-chat h3 { margin: 0; }
+.chat-log { max-height: 420px; min-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.chat-log p { margin: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.chat-log p span { display: block; }
+.chat-log p.mine b { color: var(--accent); }
+.chat-log time { color: var(--muted); font-size: 11px; margin-left: 4px; }
+.room-chat form { margin: 0; }
+.room-chat form input { flex: 1; min-width: 0; }
+/* in the player: who's in the room, chat popping up, and a box to answer */
+.p-room { position: absolute; top: 18px; right: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 3; max-width: min(520px, 80%); }
+.p-room-badge { display: flex; align-items: center; gap: 8px; background: rgba(15, 15, 16, .75); color: var(--text); border: 0; border-radius: 999px; padding: 7px 14px; font: 600 13px Inter, sans-serif; cursor: pointer; backdrop-filter: blur(6px); }
+.p-room-badge:hover { background: rgba(35, 35, 38, .9); }
+.p-room-badge svg { width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
+.p-say input { width: min(420px, 70vw); background: rgba(15, 15, 16, .9); border: 1px solid var(--accent); border-radius: 12px; padding: 9px 14px; color: var(--text); font: inherit; }
+.p-chat { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.p-chat div { background: rgba(15, 15, 16, .8); border-radius: 12px; padding: 6px 12px; font-size: 14px; overflow-wrap: anywhere; backdrop-filter: blur(6px); }
+.p-chat b { color: var(--accent); }
+#player.mini .p-room { display: none; }

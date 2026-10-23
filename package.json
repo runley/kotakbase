@@ -80,6 +80,14 @@
         "owner": "runley",
         "repo": "kotakbase"
       }
+    ],
+    "protocols": [
+      {
+        "name": "Kotakbase",
+        "schemes": [
+          "kotakbase"
+        ]
+      }
     ]
   }
 }

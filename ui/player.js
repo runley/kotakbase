@@ -134,6 +134,34 @@ function offerBuiltin (s, text) {
  * Open the player and stream `link`.
  * opts: { title, subtitle, skipTimes (duration => Promise<chapters>, used when the file has none), onTitle (title clicked), onEpisodes (episode line clicked), link, episode, numbering (optional: { abs, tvdbSeason, tvdbSeasonEpisode } for continued seasons), fileIndex (optional: play this file of the torrent), resume, hasPrev, hasNext, onProgress(time, duration), onPrev, onNext, onSources (pick another source for this episode), nextInTorrent (optional: true when the next episode is in this torrent, so it's kept loaded), player ('mpv' or 'builtin'), autoMpv (switch to mpv when the built-in player finds no audio it can play) }
  */
+// ---- Watch Together in the player: who's in the room, chat popping up over the video, and a box to answer ----
+let say = null // sends a chat message (set by the app while in a room)
+export function room (text, onSay) {
+  say = onSay
+  $('p-room').hidden = !text
+  $('p-room-text').textContent = text ?? ''
+  if (!text) { $('p-say').hidden = true; $('p-chat').replaceChildren() }
+}
+export function roomMessage (name, text) {
+  const el = $root.ownerDocument.createElement('div')
+  el.innerHTML = '<b></b> <span></span>'
+  el.firstChild.textContent = name
+  el.lastChild.textContent = text
+  $('p-chat').append(el)
+  wake()
+  setTimeout(() => el.remove(), 8000)
+}
+const sayForm = $player.querySelector('#p-say')
+sayForm.onsubmit = e => {
+  e.preventDefault()
+  const input = sayForm.querySelector('input')
+  if (input.value.trim()) say?.(input.value.trim())
+  input.value = ''
+  sayForm.hidden = true
+}
+// typing here mustn't reach the player's shortcuts (in mpv mode they're forwarded from the overlay's document)
+sayForm.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') sayForm.hidden = true })
+
 // What's playing, for Watch Together: the video (or mpv's stand-in) and whether it's waiting for data
 // (from how much is loaded, not the waiting/playing events: those don't fire while paused, and Watch Together pauses
 // everyone until the last one has loaded enough)
@@ -430,6 +458,7 @@ const actions = {
   // title → the show's page (the player docks and keeps playing); episode line → the episode list over the player.
   // The title leaves fullscreen (it docks the player); the episode list shows over the fullscreen player.
   title: () => { const s = state; minimize(); s.opts.onTitle?.() },
+  say: () => { const f = $('p-say'); f.hidden = !f.hidden; if (!f.hidden) f.querySelector('input').focus() },
   episodes: () => state.opts.onEpisodes?.()
 }
 // on #player, and in mpv mode on its stand-in in the overlay window too

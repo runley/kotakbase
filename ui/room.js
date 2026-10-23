@@ -28,6 +28,7 @@ export function valid (m) {
     case 'state': return typeof m.paused === 'boolean' && num(m.time) && (m.load == null || validLoad(m.load))
     case 'control': return typeof m.paused === 'boolean' && num(m.time)
     case 'host': return str(m.id, 40)
+    case 'chat': return str(m.text, 300) && m.text.trim().length > 0
     case 'status': return typeof m.buffering === 'boolean' && (m.key == null || str(m.key, 5000))
     default: return false
   }
@@ -52,7 +53,7 @@ export const loadKey = l => l ? JSON.stringify([l.mediaId, l.episode, l.link, l.
  * Creates (no code) or joins a room. getPlayer() → { video, buffering } | null for what's playing here;
  * onLoad(load) plays what the host picked; onChange() redraws.
  */
-export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onChange }) {
+export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onChange, onChat = () => {} }) {
   const me = { id: null, name, since: Date.now() }
   const members = new Map() // id -> { id, name, since, channel, buffering, key }
   let host = null
@@ -64,6 +65,13 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
   let autoPaused = false
   let myStatus = ''
   let closed = false
+  const chat = [] // { name, text, at, mine }, newest last
+  const addChat = (from, text, mine) => {
+    chat.push({ name: from, text, at: Date.now(), mine })
+    if (chat.length > 200) chat.shift()
+    onChat(chat.at(-1))
+    changed()
+  }
 
   const isHost = () => host === me.id
   const send = (channel, m) => { try { if (channel.readyState === 'open') channel.send(JSON.stringify(m)) } catch {} }
@@ -105,6 +113,7 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
       return changed()
     }
     if (m.t === 'host' && from === host) return setHost(m.id)
+    if (m.t === 'chat') return addChat(peer.known ? peer.name : 'Someone', m.text.trim(), false)
     if (m.t === 'status') { peer.buffering = m.buffering; peer.key = m.key; return changed() }
     if (m.t === 'control' && isHost()) {
       const p = playerNow()
@@ -202,6 +211,13 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
       load = { ...l, key: loadKey(l) }
       sendState()
       changed()
+    },
+    chat: () => chat,
+    say (text) {
+      text = String(text).trim().slice(0, 300)
+      if (!text) return
+      broadcast({ t: 'chat', text })
+      addChat(me.name, text, true)
     },
     rename (n) { me.name = n; broadcast({ t: 'hello', name: n, since: me.since, host }); changed() },
     leave () {
