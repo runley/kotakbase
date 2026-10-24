@@ -45,4 +45,4 @@ npm test
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Third-party software Kotakbase ships is listed in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and [licenses/](licenses).
+MIT, see [LICENSE](LICENSE). Also see the [Terms of Service](docs/terms.md) and [Privacy Policy](docs/privacy.md). Third-party software Kotakbase ships is listed in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and [licenses/](licenses).
