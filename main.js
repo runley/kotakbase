@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import WebTorrent from 'webtorrent'
+import Peer from 'webtorrent/lib/peer.js'
 import bencode from 'bencode'
 import { SubtitleStream } from 'matroska-subtitles'
 import { pickFile, findEpisode, VIDEO, RISKY } from './episode.js'
@@ -58,6 +59,14 @@ wipeDownloads()
 app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks')
 // No WebRTC (browser) peers: anime torrents get their peers from regular trackers and DHT, and WebRTC peers dropping
 // mid-connection throw errors nothing can catch ("Close called", "Ice connection closed")
+// A peer still finishing its (encrypted) handshake when its torrent closes, e.g. moving to the next episode, made
+// WebTorrent read the closed torrent's client and crash the app. Drop that peer instead.
+// shortcut: patches WebTorrent 3.0.21's Peer.handshake; remove once WebTorrent checks this itself
+const handshake = Peer.prototype.handshake
+Peer.prototype.handshake = function () {
+  if (!this.swarm?.client) return this.destroy(new Error('torrent closed'))
+  return handshake.call(this)
+}
 const client = new WebTorrent({ tracker: { wrtc: false } })
 const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
