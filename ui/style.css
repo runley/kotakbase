@@ -1,3 +1,4 @@
+[hidden] { display: none !important; } /* the hidden attribute wins over any display set below */
 /* Kotak: "kotak" is box in Malay/Indonesian, so the look is boxes: rounded panels on warm black, one lime accent,
    Bricolage Grotesque for headings, Inter for everything else */
 :root { --bg: #0F0F10; --panel: #1A1A1C; --panel-2: #232326; --line: #2A2A2D; --text: #F2F1EC; --muted: #9A998F; --accent: #C8F04A; --on-accent: #0F0F10; --display: 'Bricolage Grotesque', Inter, system-ui, sans-serif; --top: 68px; }

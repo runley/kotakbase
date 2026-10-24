@@ -32,7 +32,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Default,Nunito,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,1.5,2,80,80,60,1
 
 [Events]
-Format: ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `
 
 let state = null // everything for the video currently open
