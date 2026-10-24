@@ -11,6 +11,7 @@ import { readChapters } from './chapters.js'
 import { Mpv } from './mpv.js'
 import { setupAniList } from './anilist-auth.js'
 import { createDownloads } from './downloads.js'
+import { createDiscord } from './discord.js'
 import updater from 'electron-updater'
 const { autoUpdater } = updater
 
@@ -21,6 +22,8 @@ const dir = import.meta.dirname
 const secrets = (() => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'secrets.local.json'), 'utf8')) } catch { return {} } })()
 ipcMain.on('mal-client-id', e => { e.returnValue = process.env.MAL_CLIENT_ID || secrets.malClientId || '' })
 setupAniList(process.env.ANILIST_CLIENT_ID || secrets.anilistClientId || '', () => win)
+const discord = createDiscord(process.env.DISCORD_CLIENT_ID || secrets.discordClientId || '')
+ipcMain.on('discord', (_, now) => discord.set(now))
 
 // Backstop in case WebRTC peers come back (they're switched off below): they raise late errors when their torrent is
 // removed mid-connection, with nothing left listening. The peer is gone already, so it's only logged; any other

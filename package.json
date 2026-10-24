@@ -42,6 +42,7 @@
       "mpv.js",
       "anilist-auth.js",
       "downloads.js",
+      "discord.js",
       "ui/**/*",
       "secrets.local.json",
       "package.json",

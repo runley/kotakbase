@@ -795,6 +795,8 @@ function settingsPage () {
     ${hasMpv ? '' : '<p class="err">mpv is missing from this installation, so the built-in player is used.</p>'}
     <h3>Notifications</h3>
     <label class="check"><input type="checkbox" data-notify ${load('notify', true) ? 'checked' : ''}> Tell me when a new episode of a show I follow is out (checked every 30 minutes while Kotakbase is open)</label>
+    <h3>Discord</h3>
+    <label class="check"><input type="checkbox" data-discord ${load('discord', true) ? 'checked' : ''}> Show what I'm watching on my Discord profile (needs the Discord desktop app)</label>
     <h3>Closing the window</h3>
     <label class="check"><input type="checkbox" data-tray ${load('closeToTray', true) ? 'checked' : ''}> Keep Kotakbase running in the tray when the window is closed (quit from its tray icon). Turn off to quit on close.</label>
     <h3>AniList</h3>
@@ -822,6 +824,7 @@ function settingsPage () {
     if (e.target.name === 'langFirst') return save('langFirst', e.target.value)
     if (e.target.name === 'player') return save('player', e.target.value)
     if (e.target.matches('[data-mpv-auto]')) return save('mpvAuto', e.target.checked)
+    if (e.target.matches('[data-discord]')) return save('discord', e.target.checked)
     if (e.target.matches('[data-tray]')) { save('closeToTray', e.target.checked); return window.native.closeToTray(e.target.checked) }
     if (e.target.matches('[data-import-file]')) return importData(e.target.files[0]).catch(err => { document.getElementById('data-err').textContent = err.message })
     const k = e.target.dataset.add
@@ -1207,6 +1210,7 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
   room?.played({ mediaId: m.id, episode, link: result.link, title: result.title, fileIndex, numbering })
   const local = result.local ?? (fromRoom ? downloadedFile(result.link, fileIndex) : null)
   const follower = !!room && !room.isHost() // the host moves everyone to the next episode
+  nowPlaying = { title: title(m), episode, total: epCount(m), cover: m.coverImage.extraLarge }
   const total = epCount(m)
   const prev = progress()[m.id]
   // Is the next episode in this same torrent (a season pack)? Then Next / the end of the episode plays it straight away,
@@ -1572,6 +1576,13 @@ function togetherPage () {
     enterRoom(code)
   }
 }
+
+// Discord's "Watching …" for what plays, checked every 5 s (main.js passes Discord only what changed)
+let nowPlaying = null
+setInterval(() => {
+  const p = player.current()
+  window.native.discord(p && nowPlaying && load('discord', true) ? { ...nowPlaying, paused: p.video.paused, time: p.video.currentTime, duration: p.video.duration } : null)
+}, 5000)
 
 // ---- routing + shared clicks ----
 // Leaving a page by a link: note how far down it was in its history entry, so Back returns to the same spot

@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('native', {
   stop: () => ipcRenderer.invoke('stop'),
   focus: () => ipcRenderer.invoke('focus'),
   closeToTray: on => ipcRenderer.invoke('close-to-tray', on),
+  // what's playing, for Discord's "Watching …" (null clears it)
+  discord: now => ipcRenderer.send('discord', now),
   // app updates from GitHub releases; changes arrive as on('update', state)
   // downloads for watching offline; changes arrive as on('downloads', list)
   downloads: {
