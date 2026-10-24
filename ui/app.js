@@ -1683,6 +1683,38 @@ document.addEventListener('click', e => {
 window.native.on('update', s => { updateState = { ...updateState, ...s }; drawUpdate() })
 window.native.update.state().then(s => { updateState = { ...s, ...updateState, current: s.current }; drawUpdate() })
 
+// First launch, after the extensions step: offer AniList sync, so a watch history kept there comes in straight away.
+// Skippable; Settings has the same button for later. Not offered when this build can't sign in, or already has.
+async function offerAniList () {
+  if (!await sync.canOffer().catch(() => false)) return
+  const modal = document.createElement('div')
+  modal.className = 'modal'
+  modal.innerHTML = `<div class="welcome" role="dialog" aria-labelledby="anilist-offer-title">
+    <h2 id="anilist-offer-title">Sync with AniList</h2>
+    <p>Sign in with your AniList account to bring in your watch history, and to keep your progress, Your List and ratings in sync both ways from now on.</p>
+    <p class="muted">You can also do this any time in Settings.</p>
+    <div class="err"></div>
+    <div class="welcome-actions"><button class="btn ghost" data-skip>Skip for now</button><button class="btn" data-signin>Sign in with AniList</button></div>
+  </div>`
+  document.body.append(modal)
+  const close = () => { modal.remove(); document.removeEventListener('keydown', onKey) }
+  const onKey = e => { if (e.key === 'Escape') close() }
+  document.addEventListener('keydown', onKey)
+  modal.onclick = async e => {
+    if (e.target === modal || e.target.closest('[data-skip]')) return close()
+    const b = e.target.closest('[data-signin]')
+    if (!b) return
+    b.disabled = true
+    b.textContent = 'Waiting for AniList…'
+    const r = await sync.signIn()
+    if (r.ok) return close() // the first sync asks before changing anything
+    b.disabled = false
+    b.textContent = 'Sign in with AniList'
+    modal.querySelector('.err').textContent = r.error
+  }
+  modal.querySelector('[data-signin]').focus()
+}
+
 // A yes/no question in the app's own popup instead of the native confirm() box; resolves true for OK.
 // `body` is HTML, so callers escape anything that came from outside.
 function ask (title, body, ok = 'OK', cancel = 'Cancel') {
@@ -1726,6 +1758,7 @@ function welcome () {
   const close = () => {
     modal.remove()
     document.removeEventListener('keydown', onKey)
+    offerAniList() // the second step of the first launch
     if (!added) return
     // show what was installed
     if (location.hash === '#/extensions') route()

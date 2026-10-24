@@ -277,6 +277,19 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
   }
 
   // Settings → AniList, drawn into `el`; redrawn while it's on screen
+  // AniList's sign-in window, then the first sync; { ok } or { ok: false, error } ('' when the window was just closed)
+  async function signIn () {
+    const r = await native.signIn()
+    if (r.error != null || !r.user) return { ok: false, error: r.error ?? '' }
+    // a different account than last time: its list is merged afresh
+    if (base()?.user !== r.user.id) { save(BASE, null); save(OUTBOX, {}) }
+    account = r
+    syncNow()
+    return { ok: true }
+  }
+  // can this build sign in (it has a client id), and isn't it signed in already?
+  const canOffer = async () => { const a = await native.account(); return a.configured !== false && !a.user }
+
   function settings (el) {
     let error = ''
     const draw = () => {
@@ -300,12 +313,9 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     el.onclick = async e => {
       if (e.target.closest('[data-anilist-signin]')) {
         error = ''
-        const r = await native.signIn()
-        if (r.error != null || !r.user) { error = r.error ?? ''; return draw() }
-        // a different account than last time: its list is merged afresh
-        if (base()?.user !== r.user.id) { save(BASE, null); save(OUTBOX, {}) }
-        account = r
-        return syncNow()
+        const r = await signIn()
+        if (!r.ok) { error = r.error; draw() }
+        return
       }
       if (e.target.closest('[data-anilist-sync]')) return syncNow()
       if (e.target.closest('[data-anilist-signout]')) {
@@ -322,5 +332,5 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     const tick = setInterval(() => el.isConnected ? draw() : clearInterval(tick), 30000) // "Synced 2 min ago" moves on
   }
 
-  return { start, changed, unwatch, settings, syncNow }
+  return { start, changed, unwatch, settings, syncNow, signIn, canOffer }
 }
