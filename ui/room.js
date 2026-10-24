@@ -12,7 +12,8 @@ export const parseCode = text => { const c = String(text).toUpperCase().replace(
 const str = (v, max) => typeof v === 'string' && v.length <= max
 const int = v => Number.isInteger(v) && v >= 0 && v < 1e9
 const num = v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1e7
-const TORRENT = /^(magnet:\?xt=urn:btih:|https?:\/\/)\S+$/i
+// what extensions hand over: a magnet (names in it may have raw spaces), a bare info hash (hex or base32), or a .torrent URL
+const TORRENT = /^(magnet:\?[^\x00-\x1f]+|[0-9a-f]{40}|[a-z2-7]{32}|https?:\/\/[^\s\x00-\x1f]+)$/i
 export function validLoad (l) {
   if (!l || typeof l !== 'object') return false
   if (!int(l.mediaId) || !int(l.episode) || !str(l.link, 4096) || !TORRENT.test(l.link) || !str(l.key, 5000)) return false
@@ -65,6 +66,7 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
   let autoPaused = false
   let myStatus = ''
   let closed = false
+  let problem = ''
   const chat = [] // { name, text, at, mine }, newest last
   const addChat = (from, text, mine) => {
     chat.push({ name: from, text, at: Date.now(), mine })
@@ -106,7 +108,12 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
 
   function onMessage (from, m) {
     const peer = members.get(from)
-    if (!peer || !valid(m)) return
+    if (!peer) return
+    // the host's app sent something this one can't read (most likely another version): say so rather than ignore it
+    if (!valid(m)) {
+      if (from === host && !problem) { problem = 'The host\'s Kotakbase sent something this one can\'t read. Make sure you both have the latest version (Settings → Updates).'; changed() }
+      return
+    }
     if (m.t === 'hello') {
       Object.assign(peer, { name: m.name, since: m.since, known: true })
       if (!host && m.host) setHost(m.host) // just joined: learn who the host is
@@ -200,6 +207,7 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
     get host () { return host },
     get load () { return load },
     get net () { return net },
+    get problem () { return problem },
     isHost,
     members: () => [...members.values()],
     // the room was just created here: you're its host

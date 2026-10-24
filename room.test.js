@@ -14,6 +14,13 @@ test('room codes: 12 unambiguous characters, typed back in any format', () => {
 test('messages from other members: only well-formed ones get through', () => {
   const load = { mediaId: 21, episode: 3, link: 'magnet:?xt=urn:btih:abc', key: 'k', fileIndex: 2, numbering: { abs: 40 } }
   assert.ok(validLoad(load))
+  // the link forms extensions really return
+  assert.ok(validLoad({ ...load, link: 'magnet:?xt=urn:btih:abc&dn=[SubsPlease] Slime - 16 (1080p).mkv&tr=udp://t:1' }))
+  assert.ok(validLoad({ ...load, link: '08ada5a7a6183aae1e09d831df6748d566095a10' }))
+  assert.ok(validLoad({ ...load, link: 'BBMWHGU4YQ4GVQ2HCXI53EN5LAEBAO2G' }))
+  assert.ok(validLoad({ ...load, link: 'https://nyaa.si/download/1.torrent' }))
+  assert.ok(!validLoad({ ...load, link: 'magnet:?xt=urn:btih:abc\nevil' }))
+  assert.ok(!validLoad({ ...load, link: 'not a link' }))
   assert.ok(!validLoad({ ...load, link: 'javascript:alert(1)' }))
   assert.ok(!validLoad({ ...load, link: 'file:///C:/Windows/notepad.exe' }))
   assert.ok(!validLoad({ ...load, episode: -1 }))

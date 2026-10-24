@@ -1536,7 +1536,7 @@ function togetherPage () {
           <form class="add" data-chat><input data-field="chat" maxlength="300" placeholder="Say something…" aria-label="Message the room" autocomplete="off"><button class="btn">Send</button></form>
         </section>
       </div>
-      <p class="err">${esc(roomError)}</p></div>`
+      <p class="err">${esc(roomError || room.problem)}</p></div>`
     const log = $app.querySelector('.chat-log')
     log.scrollTop = log.scrollHeight
   }
