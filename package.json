@@ -1,7 +1,7 @@
 {
   "name": "kotakbase",
   "productName": "Kotakbase",
-  "version": "0.1.0-beta.12",
+  "version": "0.1.0-beta.13",
   "description": "Stream anime torrents with Hayase-compatible extensions",
   "main": "main.js",
   "scripts": {
@@ -53,7 +53,17 @@
     "npmRebuild": false,
     "win": {
       "target": "nsis",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "vendor/mpv",
+          "to": "mpv",
+          "filter": [
+            "mpv.exe",
+            "d3dcompiler_43.dll"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -63,14 +73,6 @@
       "artifactName": "Kotakbase-Setup-${version}.${ext}"
     },
     "extraResources": [
-      {
-        "from": "vendor/mpv",
-        "to": "mpv",
-        "filter": [
-          "mpv.exe",
-          "d3dcompiler_43.dll"
-        ]
-      },
       {
         "from": "licenses",
         "to": "licenses"
@@ -90,6 +92,16 @@
           "kotakbase"
         ]
       }
-    ]
-  }
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "AudioVideo",
+      "icon": "build/icon.png",
+      "artifactName": "Kotakbase-${version}.${ext}",
+      "syncDesktopName": true
+    }
+  },
+  "desktopName": "kotakbase.desktop"
 }

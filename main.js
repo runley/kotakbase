@@ -1,6 +1,7 @@
 import { app, BaseWindow, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, shell, Tray } from 'electron'
 import fs from 'node:fs'
 import http from 'node:http'
+import os from 'node:os'
 import path from 'node:path'
 import WebTorrent from 'webtorrent'
 import Peer from 'webtorrent/lib/peer.js'
@@ -271,7 +272,12 @@ ipcMain.handle('downloads-choose-dir', async () => {
 // window). The page opens the overlay with window.open and moves the player's controls into it, so player.js drives
 // both modes. While the player is full-size the overlay holds the focus (Chromium hides an idle cursor only in the
 // active window) and passes keys on to the page; docked, or under a dialog, the focus goes back to the page.
-const mpvExe = app.isPackaged ? path.join(process.resourcesPath, 'mpv', 'mpv.exe') : path.join(dir, 'vendor', 'mpv', 'mpv.exe')
+// Windows: the mpv.exe shipped with the installer. Linux: the system's own mpv (apt install mpv); mpv draws into
+// Kotakbase's window by its X11 id, so only in an X11 session (Wayland windows have none).
+const mpvExe = process.platform === 'win32'
+  ? (app.isPackaged ? path.join(process.resourcesPath, 'mpv', 'mpv.exe') : path.join(dir, 'vendor', 'mpv', 'mpv.exe'))
+  : process.env.XDG_SESSION_TYPE === 'x11' ? ['/usr/bin/mpv', '/usr/local/bin/mpv', '/snap/bin/mpv'].find(p => fs.existsSync(p)) : null
+const hasMpv = () => !!mpvExe && fs.existsSync(mpvExe)
 const OVERLAY = 'kotakbase-mpv-overlay'
 let mpv = null
 let mpvCount = 0
@@ -317,12 +323,14 @@ function focusOverlay () {
 }
 ipcMain.on('mpv-bounds', (_, rect) => { playerRect = rect; placeMpv() })
 
-ipcMain.handle('mpv-available', () => fs.existsSync(mpvExe))
+ipcMain.handle('mpv-available', hasMpv)
 ipcMain.handle('mpv-open', async () => {
   if (mpv) return mpv.ready
-  if (!fs.existsSync(mpvExe)) throw new Error('mpv is missing from this installation')
-  const wid = mpvHost().getNativeWindowHandle().readBigUInt64LE(0)
-  const m = mpv = new Mpv(mpvExe, { wid, pipe: String.raw`\\.\pipe\kotakbase-mpv-` + `${process.pid}-${++mpvCount}` })
+  if (!hasMpv()) throw new Error(process.platform === 'win32' ? 'mpv is missing from this installation' : 'mpv needs the mpv package installed and an X11 session')
+  const handle = mpvHost().getNativeWindowHandle() // an HWND on Windows, an X11 window id on Linux
+  const wid = handle.length >= 8 ? handle.readBigUInt64LE(0) : handle.readUInt32LE(0)
+  const name = `kotakbase-mpv-${process.pid}-${++mpvCount}`
+  const m = mpv = new Mpv(mpvExe, { wid, pipe: process.platform === 'win32' ? '\\\\.\\pipe\\' + name : path.join(os.tmpdir(), name + '.sock') })
   m.on('property', (name, value) => send('mpv-prop', name, value))
   m.on('event', e => send('mpv-event', e))
   // only an exit nobody asked for (a crash): one being quit is no longer `mpv`, and the page may already use a new one

@@ -38,9 +38,14 @@ export function createDiscord (clientId) {
   let sent = null // the activity Discord has, to send only changes
   let wanted = null
 
+  // Windows: a named pipe. Linux: a socket in the runtime folder, or the Flatpak/Snap Discord's folder inside it
+  const base = process.env.XDG_RUNTIME_DIR || process.env.TMPDIR || '/tmp'
+  const pipes = process.platform === 'win32'
+    ? Array.from({ length: 10 }, (_, n) => `\\\\?\\pipe\\discord-ipc-${n}`)
+    : ['', '/app/com.discordapp.Discord', '/snap.discord'].flatMap(dir => Array.from({ length: 10 }, (_, n) => `${base}${dir}/discord-ipc-${n}`))
   const connect = (n = 0) => {
-    if (n > 9) return
-    const s = net.createConnection(`\\\\?\\pipe\\discord-ipc-${n}`)
+    if (n >= pipes.length) return
+    const s = net.createConnection(pipes[n])
     // not there: Discord uses the first free pipe of 0-9; a connection that breaks later just ends
     s.once('error', () => { s.destroy(); if (socket === s) { socket = null; ready = false } else connect(n + 1) })
     s.once('connect', () => {
