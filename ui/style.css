@@ -345,14 +345,16 @@ button.chip.genre:hover { background: var(--accent); color: var(--on-accent); }
 .p-skip[hidden], #player.mini .p-skip { display: none; }
 
 /* history page */
-.hist-page { max-width: 820px; }
-.hist-day { margin: 26px 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
-.hist { display: flex; align-items: center; gap: 14px; padding: 8px; border-radius: 16px; }
+/* sizes grow with the window, like the home cards, so a big fullscreen window isn't all tiny rows */
+.hist-page { max-width: clamp(820px, 52vw, 1240px); }
+.hist-day { margin: 26px 0 8px; font-size: clamp(14px, 0.8vw, 18px); color: var(--muted); font-weight: 600; }
+.hist { display: flex; align-items: center; gap: clamp(14px, 0.9vw, 20px); padding: clamp(8px, 0.45vw, 12px); font-size: clamp(14px, 0.85vw, 18px); border-radius: 16px; }
 .hist:hover, .hist:focus-visible { background: var(--panel); }
-.hist img { width: 46px; height: 65px; object-fit: cover; border-radius: 10px; background: var(--panel-2); flex: none; }
+.hist img { width: clamp(46px, 3vw, 68px); aspect-ratio: 46 / 65; height: auto; object-fit: cover; border-radius: 10px; background: var(--panel-2); flex: none; }
 .hist-main { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hist-main .muted { font-size: .9em; }
 .hist-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hist time { color: var(--muted); font-size: 12px; }
+.hist time { color: var(--muted); font-size: .82em; }
 
 /* show page: your star rating */
 .stars { display: flex; align-items: center; gap: 2px; margin-left: 10px; font-size: 12px; }
