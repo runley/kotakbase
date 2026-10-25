@@ -34,7 +34,8 @@ jobs:
           MAL_CLIENT_ID: ${{ secrets.MAL_CLIENT_ID }}
           ANILIST_CLIENT_ID: ${{ secrets.ANILIST_CLIENT_ID }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
-        run: node -e "require('fs').writeFileSync('secrets.local.json', JSON.stringify({ malClientId: process.env.MAL_CLIENT_ID, anilistClientId: process.env.ANILIST_CLIENT_ID, discordClientId: process.env.DISCORD_CLIENT_ID }))"
+        run: |
+          node -e "require('fs').writeFileSync('secrets.local.json', JSON.stringify({ malClientId: process.env.MAL_CLIENT_ID, anilistClientId: process.env.ANILIST_CLIENT_ID, discordClientId: process.env.DISCORD_CLIENT_ID }))"
       - run: node scripts/vendor.mjs && node scripts/notices.mjs
       - run: npx electron-builder --linux AppImage --publish never
       - name: Attach to the release
