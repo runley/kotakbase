@@ -6,7 +6,7 @@ By downloading or using Kotakbase, you agree to these terms.
 
 ## The software
 
-Kotakbase is free, open-source software licensed under the [MIT License](../LICENSE). It is provided "as is", without warranty of any kind. The developers aren't liable for any damage or loss from using it, as the license says in full.
+Kotakbase is free, open-source software licensed under the [MIT License](https://github.com/runley/kotakbase/blob/main/LICENSE). It is provided "as is", without warranty of any kind. The developers aren't liable for any damage or loss from using it, as the license says in full.
 
 ## Content and extensions
 
@@ -16,7 +16,7 @@ You are responsible for what you install, search for, stream, download and share
 
 ## Third-party services
 
-Kotakbase works with services such as AniList, MyAnimeList, Discord and GitHub. Using them through Kotakbase is also subject to their own terms. See the [Privacy Policy](privacy.md) for what each one is used for.
+Kotakbase works with services such as AniList, MyAnimeList, Discord and GitHub. Using them through Kotakbase is also subject to their own terms. See the [Privacy Policy](privacy) for what each one is used for.
 
 ## Watch Together
 

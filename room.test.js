@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { newCode, formatCode, parseCode, valid, validLoad, syncPlan, electHost, loadKey } from './ui/room.js'
+import { newCode, formatCode, parseCode, inviteLink, valid, validLoad, syncPlan, electHost, loadKey } from './ui/room.js'
 
 test('room codes: 12 unambiguous characters, typed back in any format', () => {
   const code = newCode()
@@ -9,6 +9,10 @@ test('room codes: 12 unambiguous characters, typed back in any format', () => {
   assert.equal(parseCode(` ${formatCode(code)} `), code)
   assert.equal(parseCode('ABCD-EFGH-IJK0'), null) // I and 0 are never used
   assert.equal(parseCode('short'), null)
+  // invite links of both kinds
+  assert.equal(parseCode(inviteLink(code)), code)
+  assert.equal(parseCode(`kotakbase://join/${formatCode(code)}`), code)
+  assert.match(inviteLink(code), /^https:\/\/runley\.github\.io\/kotakbase\/join#[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)
 })
 
 test('messages from other members: only well-formed ones get through', () => {

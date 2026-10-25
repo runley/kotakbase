@@ -4,7 +4,7 @@ import { parseRelease, releaseTags, audioLanguages, subLanguages, rankByLanguage
 import { LANGS, SIGNS } from './lang.js'
 import { fromMal, malAnime } from './mal.js'
 import { createSync } from './anilist-sync.js'
-import { openRoom, parseCode, formatCode } from './room.js'
+import { openRoom, parseCode, formatCode, inviteLink } from './room.js'
 
 const $app = document.getElementById('app')
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
@@ -1423,7 +1423,6 @@ const fileText = f => f.missing ? 'File missing' : f.done ? size(f.length) : `${
 let room = null // the room you're in, if any
 let roomError = ''
 const roomName = () => load('roomName', '') || `Guest ${Math.floor(100 + Math.random() * 900)}`
-const inviteLink = code => `kotakbase://join/${formatCode(code)}`
 
 async function enterRoom (code) {
   if (room) return
@@ -1571,7 +1570,7 @@ function togetherPage () {
       input.value = '' // before saying it: saying redraws the page, which keeps what's typed
       return room?.say(text)
     }
-    const code = parseCode($app.querySelector('[data-field="code"]').value.replace(/^kotakbase:\/\/join\//i, ''))
+    const code = parseCode($app.querySelector('[data-field="code"]').value)
     if (!code) { roomError = 'That isn\'t a room code. It looks like XXXX-XXXX-XXXX.'; return togetherPage() }
     enterRoom(code)
   }

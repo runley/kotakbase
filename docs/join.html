@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join a Kotakbase room</title>
+<meta name="description" content="Someone invited you to watch together in Kotakbase.">
+<meta property="og:title" content="Join my Kotakbase room">
+<meta property="og:description" content="Watch anime together in Kotakbase: click to join the room.">
+<meta property="og:image" content="https://runley.github.io/kotakbase/home.jpg">
+<meta name="theme-color" content="#C8F04A">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@800&family=Inter:wght@400;600&display=swap">
+<style>
+  :root { --bg: #0F0F10; --panel: #1A1A1C; --line: #2A2A2D; --text: #F2F1EC; --muted: #9A998F; --accent: #C8F04A; --on-accent: #0F0F10; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
+  main { width: min(480px, 100%); background: var(--panel); border-radius: 24px; padding: 28px; }
+  .logo { display: flex; align-items: center; gap: 10px; font: 800 20px 'Bricolage Grotesque', Inter, sans-serif; margin-bottom: 22px; }
+  .logo span { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+  h1 { font: 800 26px/1.15 'Bricolage Grotesque', Inter, sans-serif; margin: 0 0 8px; }
+  p { margin: 0 0 16px; color: var(--muted); }
+  .code { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 18px 0; }
+  .code b { font: 800 22px 'Bricolage Grotesque', Inter, sans-serif; letter-spacing: 2px; overflow-wrap: anywhere; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 12px; border: 0; font: 600 15px Inter, sans-serif; text-decoration: none; cursor: pointer; background: var(--accent); color: var(--on-accent); }
+  .btn.ghost { background: none; color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .btn.small { min-height: 36px; padding: 0 14px; font-size: 13px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  small { display: block; margin-top: 18px; color: var(--muted); font-size: 13px; }
+  a { color: var(--accent); }
+  .btn:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo"><span aria-hidden="true">k</span>kotakbase</div>
+  <div id="room">
+    <h1>You're invited to watch together</h1>
+    <p>Opening Kotakbase… If your browser asks, allow it to open Kotakbase.</p>
+    <div class="code"><b id="code"></b><button class="btn ghost small" id="copy" type="button">Copy code</button></div>
+    <div class="actions">
+      <a class="btn" id="open">Open in Kotakbase</a>
+      <a class="btn ghost" href="https://github.com/runley/kotakbase/releases/latest">Get Kotakbase</a>
+    </div>
+    <small>If Kotakbase doesn't open, start it, go to Watch Together and enter the code above.</small>
+  </div>
+  <div id="none" hidden>
+    <h1>No room in this link</h1>
+    <p>Ask for the invite link again, or enter the room code in Kotakbase under Watch Together.</p>
+    <a class="btn" href="https://github.com/runley/kotakbase">About Kotakbase</a>
+  </div>
+</main>
+<script>
+  // the code is after the #, which browsers never send to the server
+  const code = decodeURIComponent(location.hash.slice(1)).toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (/^[A-HJ-NP-Z2-9]{12}$/.test(code)) {
+    const nice = code.match(/.{4}/g).join('-')
+    const link = 'kotakbase://join/' + nice
+    document.getElementById('code').textContent = nice
+    document.getElementById('open').href = link
+    document.getElementById('copy').onclick = e => navigator.clipboard.writeText(nice).then(() => { e.target.textContent = 'Copied' })
+    location.href = link
+  } else {
+    document.getElementById('room').hidden = true
+    document.getElementById('none').hidden = false
+  }
+</script>
+</body>
+</html>

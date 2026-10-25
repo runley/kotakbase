@@ -6,7 +6,9 @@ import { joinRoom } from './room-net.js'
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O or 1/I
 export const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), b => CODE_CHARS[b % 32]).join('')
 export const formatCode = code => code.match(/.{1,4}/g).join('-')
-export const parseCode = text => { const c = String(text).toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-HJ-NP-Z2-9]{12}$/.test(c) ? c : null }
+// a code typed in any format, or the end of an invite link (…/join#CODE or kotakbase://join/CODE)
+export const parseCode = text => { const c = String(text).trim().split(/[#/]/).pop().toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-HJ-NP-Z2-9]{12}$/.test(c) ? c : null }
+export const inviteLink = code => `https://runley.github.io/kotakbase/join#${formatCode(code)}`
 
 // ---- messages from other members are untrusted: anything malformed is dropped ----
 const str = (v, max) => typeof v === 'string' && v.length <= max

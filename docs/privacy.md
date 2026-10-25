@@ -18,7 +18,7 @@ Kotakbase only contacts the services below, and only to do what's described. Eac
 - **MyAnimeList** (myanimelist.net): show details when AniList is unavailable.
 - **ani.zip** and **AniSkip** (aniskip.com): episode details, and opening/ending times for the "Skip Intro" button.
 - **Discord**, if the Discord desktop app is running and the setting is on: the title, episode, cover image and playback position of what you're watching are shared with Discord to show on your profile. Turn it off in Settings → Discord.
-- **GitHub** (github.com): checking for and downloading Kotakbase updates.
+- **GitHub** (github.com): checking for and downloading Kotakbase updates. This website and its invite pages are also hosted by GitHub Pages; an invite link's room code stays in your browser and isn't sent to GitHub.
 - **Google Fonts**: the fonts the app's pages use.
 - **Extensions** you install: their code runs in Kotakbase and contacts the sites it was written for when you search for a source. Extensions are made by third parties; Kotakbase doesn't control what they contact.
 - **BitTorrent and WebTorrent**: when you stream or download, your IP address is visible to torrent trackers and to other people sharing the same torrent. This is how BitTorrent works.
