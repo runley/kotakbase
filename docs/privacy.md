@@ -1,3 +1,6 @@
+---
+title: Privacy Policy · Kotakbase
+---
 # Kotakbase Privacy Policy
 
 _Last updated: October 24, 2026_

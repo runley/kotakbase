@@ -1,3 +1,6 @@
+---
+title: Terms of Service · Kotakbase
+---
 # Kotakbase Terms of Service
 
 _Last updated: October 24, 2026_

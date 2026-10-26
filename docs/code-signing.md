@@ -1,3 +1,6 @@
+---
+title: Code Signing Policy · Kotakbase
+---
 # Kotakbase Code Signing Policy
 
 _Last updated: October 26, 2026_
