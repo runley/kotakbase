@@ -6,6 +6,7 @@ import { fromMal, malAnime } from './mal.js'
 import { createSync } from './anilist-sync.js'
 import { openRoom, parseCode, formatCode, inviteLink } from './room.js'
 import { t, setLanguage, pickLanguage, language, LANGUAGES } from './i18n.js'
+import { fetchRussian } from './shikimori.js'
 
 const $app = document.getElementById('app')
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
@@ -31,13 +32,33 @@ await setLanguage(pickLanguage(load('language', null), navigator.languages))
 document.documentElement.lang = language()
 window.native.setLanguage(language())
 
+// Show titles and descriptions in Russian when the app is in Russian or Kazakh, from Shikimori by MyAnimeList id.
+// Fetched when a list of shows comes in, saved for later starts; whatever Shikimori lacks (or can't answer) stays English.
+const RUSSIAN = ['ru', 'kk'].includes(language())
+const SHIKI = 'shikimori' // malId -> { title, description }
+const russian = new Map(Object.entries(RUSSIAN ? load(SHIKI, {}) : {}))
+const asked = new Set() // ids asked for this app start, found or not
+let saveRussian
+async function localize (list) {
+  if (!RUSSIAN) return list
+  const ids = [...new Set(list.map(m => m?.idMal).filter(id => id && !russian.has(String(id)) && !asked.has(id)))]
+  if (!ids.length) return list
+  ids.forEach(id => asked.add(id))
+  try {
+    for (const [id, r] of await fetchRussian(ids)) russian.set(id, r)
+    clearTimeout(saveRussian)
+    saveRussian = setTimeout(() => { try { save(SHIKI, Object.fromEntries(russian)) } catch {} }, 1000)
+  } catch {} // Shikimori unreachable: English for now, asked again next start
+  return list
+}
+
 // ---- AniList ----
 const FIELDS = `id idMal title { romaji english native userPreferred } synonyms coverImage { large extraLarge color } bannerImage
   description(asHtml: false) episodes format status season seasonYear averageScore genres duration
   nextAiringEpisode { episode } startDate { year month day } tags { name isMediaSpoiler }`
 // Just what cards and the home hero show, for long lists (home rows, View More, search): a top-100 list with
 // descriptions and tags is several times bigger. The show page and anything needing the rest fetch FIELDS (see full).
-const LIST_FIELDS = `id title { romaji english native userPreferred } coverImage { large extraLarge color } bannerImage
+const LIST_FIELDS = `id idMal title { romaji english native userPreferred } coverImage { large extraLarge color } bannerImage
   episodes format status season seasonYear averageScore genres nextAiringEpisode { episode } startDate { year month day }`
 const full = m => !!m && 'synonyms' in m // fetched with FIELDS, not LIST_FIELDS
 
@@ -52,7 +73,7 @@ async function anilist (query, variables = {}, tries = 0) {
   if (json.errors) throw new Error(json.errors[0].message)
   return json.data
 }
-const page = (args, vars, variables, { perPage = 30, pageNum = 1, fields = FIELDS } = {}) => anilist(`query${vars ? `(${vars})` : ''} { Page(page: ${pageNum}, perPage: ${perPage}) { media(type: ANIME, isAdult: false, ${args}) { ${fields} } } }`, variables).then(d => d.Page.media)
+const page = (args, vars, variables, { perPage = 30, pageNum = 1, fields = FIELDS } = {}) => anilist(`query${vars ? `(${vars})` : ''} { Page(page: ${pageNum}, perPage: ${perPage}) { media(type: ANIME, isAdult: false, ${args}) { ${fields} } } }`, variables).then(d => localize(d.Page.media))
 // The first `limit` results of a list query; AniList hands out at most 50 per request, so the top 100 takes two.
 // Home lists: shown instantly from what was saved last time, and re-downloaded once per app start in the background
 // (saved for the next visit), so they're fresh each launch and every later visit that day needs no download.
@@ -74,7 +95,7 @@ function top (args, vars, variables, limit) {
   }
   const saved = load(key, null)
   if (saved) {
-    listCache.set(key, Promise.resolve(remember(saved.list, saved.at)))
+    listCache.set(key, localize(remember(saved.list, saved.at))) // only asks Shikimori for titles not saved yet
     download().then(list => listCache.set(key, Promise.resolve(list)), () => {}) // keep the saved one if it fails
   } else {
     const promise = download()
@@ -145,6 +166,7 @@ async function malDetails (id, urgent = false) {
   const m = fromMal(id, await malAnime(mal, window.native.malClientId, { urgent }), zip)
   if (m.isAdult) throw new Error('Adult title')
   remember([m], 0)
+  await localize([m])
   persistShows()
   return m
 }
@@ -166,7 +188,7 @@ async function byIds (ids, onProgress) {
   // copies saved by an earlier app start are refreshed in the background, once; a failure keeps the saved copy
   const stale = ids.filter(id => cacheAt.get(id) < launched && !refreshing.has(id))
   if (stale.length) { stale.forEach(id => refreshing.add(id)); fetchIds(stale).catch(() => stale.forEach(id => refreshing.delete(id))) }
-  return ids.map(id => cache.get(id)).filter(Boolean)
+  return localize(ids.map(id => cache.get(id)).filter(Boolean))
 }
 // A show's page needs current details (episode count, next airing episode), so anything older than 5 minutes is
 // fetched again; the cached copy is the fallback if that fails, and MyAnimeList if there's no copy at all.
@@ -192,7 +214,7 @@ function once (key, fetch) {
 // AniList's user recommendations, best rated first
 const similar = id => once('similar' + id, () =>
   anilist(`query($id: Int) { Media(id: $id) { recommendations(sort: RATING_DESC, perPage: 30) { nodes { mediaRecommendation { isAdult ${FIELDS} } } } } }`, { id })
-    .then(d => remember(d.Media.recommendations.nodes.map(n => n.mediaRecommendation).filter(r => r && !r.isAdult))))
+    .then(d => localize(remember(d.Media.recommendations.nodes.map(n => n.mediaRecommendation).filter(r => r && !r.isAdult)))))
 // The whole franchise, not just direct neighbours: follow seasons, side stories, spin-offs etc. outward one hop per
 // request two hops at a time (crossovers via shared characters are left out), then list them in release order.
 // "OTHER" links count too (Slime's first movie is only linked that way), except music videos, but aren't followed
@@ -226,7 +248,9 @@ const related = id => once('related' + id, async () => {
 const epCount = m => m.episodes ?? (m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : 1)
 // episodes out so far: an airing show's planned total hasn't all aired yet
 const airedCount = m => m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : epCount(m)
-const title = m => m.title.english ?? m.title.userPreferred ?? m.title.romaji
+// Japanese: the original title; Russian and Kazakh: Shikimori's Russian one; otherwise English, then romaji
+const title = m => (language() === 'ja' && m.title.native) || (RUSSIAN && russian.get(String(m.idMal))?.title) || (m.title.english ?? m.title.userPreferred ?? m.title.romaji)
+const description = m => (RUSSIAN && russian.get(String(m.idMal))?.description) || plain(m.description)
 const FORMAT = { TV: 'TV Series', TV_SHORT: 'TV Short', MOVIE: 'Movie', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Special' }
 const fmt = f => FORMAT[f] ? t(FORMAT[f]) : (f ?? '')
 const STATUS = { RELEASING: 'Releasing', FINISHED: 'Finished', NOT_YET_RELEASED: 'Not yet released', CANCELLED: 'Cancelled', HIATUS: 'On hiatus' }
@@ -444,7 +468,7 @@ function weekSchedule (all) {
       out.push(...d.Page.airingSchedules.filter(s => !s.media.isAdult))
       if (!d.Page.pageInfo.hasNextPage) break
     }
-    remember(out.map(s => s.media))
+    await localize(remember(out.map(s => s.media)))
     return out
   })
 }
@@ -612,7 +636,7 @@ async function detail (id) {
     <div class="show-head">
       <img src="${esc(m.coverImage.extraLarge)}" alt="">
       <div>
-        <div class="show-native">${esc(m.title.native)}</div>
+        <div class="show-native">${esc(language() === 'ja' ? (m.title.english ?? m.title.romaji) : m.title.native)}</div>
         <h1>${esc(title(m))}</h1>
         <div class="tags">
           <span class="pill">${p ? `${Math.min(current, total)} / ${t('{n} episodes', { n: total })}` : t('{n} episodes', { n: total })}</span>
@@ -621,7 +645,7 @@ async function detail (id) {
           ${m.season ? `<span class="pill">${esc(SEASON[m.season] ? t(SEASON[m.season]) : m.season)} ${m.seasonYear}</span>` : ''}
           ${m.averageScore ? `<span class="pill score">${m.averageScore}%</span>` : ''}
         </div>
-        <p class="show-desc">${esc(plain(m.description))}</p>
+        <p class="show-desc">${esc(description(m))}</p>
       </div>
     </div>
     <div class="show-actions">
