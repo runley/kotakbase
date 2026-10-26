@@ -1,6 +1,7 @@
 // Discord Rich Presence: "Watching Frieren · Episode 12 / 28" on your Discord profile while an episode plays. It talks to
 // the Discord desktop app over its local pipe (no server, no sign-in); if Discord isn't running, nothing happens.
 import net from 'node:net'
+import { t } from './ui/i18n.js'
 
 // What Discord should show for what's playing (null: nothing). now: { title, episode, total, cover, paused, time, duration }
 export function toActivity (now) {
@@ -10,7 +11,7 @@ export function toActivity (now) {
     type: 3, // Watching
     status_display_type: 2, // the member list says "Watching <show>", not "Watching Kotakbase"
     details: pad(now.title),
-    state: pad(now.total > 1 ? `Episode ${now.episode} / ${now.total}` : now.paused ? 'Paused' : 'Movie'),
+    state: pad(now.total > 1 ? t('Episode {n} / {total}', { n: now.episode, total: now.total }) : now.paused ? t('Paused') : t('Movie')),
     assets: { large_image: now.cover || 'logo', large_text: pad(now.title) },
     instance: false
   }

@@ -5,6 +5,7 @@
 import electron from 'electron' // the default import: a plain `node --test` loads this file for parseRedirect too
 import fs from 'node:fs'
 import path from 'node:path'
+import { t } from './ui/i18n.js'
 
 export const REDIRECT = 'https://anilist.co/api/v2/oauth/pin' // registered with the app's Client ID on AniList
 
@@ -70,7 +71,7 @@ export function setupAniList (clientId, parent) {
     if (!clientId) return { error: 'AniList sign-in isn\'t set up in this build (no Client ID).' }
     if (!safeStorage.isEncryptionAvailable()) return { error: 'Windows can\'t encrypt the AniList sign-in on this PC, so it can\'t be kept.' }
     const got = await new Promise(resolve => {
-      const w = new BrowserWindow({ parent: parent(), modal: true, width: 520, height: 760, autoHideMenuBar: true, title: 'Sign in with AniList', webPreferences: { partition: PARTITION } })
+      const w = new BrowserWindow({ parent: parent(), modal: true, width: 520, height: 760, autoHideMenuBar: true, title: t('Sign in with AniList'), webPreferences: { partition: PARTITION } })
       let done = false
       const finish = r => { if (done) return; done = true; resolve(r); if (!w.isDestroyed()) w.close() }
       // the redirect may come as a server redirect or as the page navigating; either way it's stopped before loading

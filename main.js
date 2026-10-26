@@ -13,6 +13,9 @@ import { Mpv } from './mpv.js'
 import { setupAniList } from './anilist-auth.js'
 import { createDownloads } from './downloads.js'
 import { createDiscord } from './discord.js'
+import { t, setLanguage } from './ui/i18n.js'
+// messages sent to the page, which shows them in the user's language (tk marks them for the translation files)
+const tk = s => s
 import updater from 'electron-updater'
 const { autoUpdater } = updater
 
@@ -186,8 +189,8 @@ async function startPlay (link, episode, fileIndex, numbering, mpvMode) {
   // checked on the file list alone, before anything downloads; a refused torrent is dropped
   const refuse = async message => { if (!downloads.owns(torrent)) await client.remove(torrent, { destroyStore: true }); throw new Error(message) }
   const risky = torrent.files.filter(f => RISKY.test(f.name)).map(f => f.name)
-  if (risky.length) await refuse(`This torrent contains program files (${risky.slice(0, 3).join(', ')}), a common sign of a fake or malware, so it won't be played. Pick another source.`)
-  if (!torrent.files.some(f => VIDEO.test(f.name))) await refuse("There's no video in this torrent. Pick another source.")
+  if (risky.length) await refuse(tk("This torrent contains program files, a common sign of a fake or malware, so it won't be played. Pick another source."))
+  if (!torrent.files.some(f => VIDEO.test(f.name))) await refuse(tk("There's no video in this torrent. Pick another source."))
   const file = torrent.files[fileIndex] ?? pickFile(torrent.files, episode, numbering)
   if (!downloads.owns(torrent)) torrent.files.forEach(f => f !== file && f.deselect()) // a download keeps fetching its other episodes
   file.select()
@@ -196,7 +199,7 @@ async function startPlay (link, episode, fileIndex, numbering, mpvMode) {
 // a downloaded episode, straight from disk
 ipcMain.handle('play-download', async (_, id, index, mpvMode) => {
   const file = downloads.local(id, index)
-  if (!file) throw new Error('This download is missing or not finished.')
+  if (!file) throw new Error(tk('This download is missing or not finished.'))
   await dropCurrent()
   await dropBrowsing()
   return serve(file, null, `local/${id}/${index}`, mpvMode)
@@ -261,7 +264,7 @@ ipcMain.handle('downloads-remove', (_, id, index) => downloads.remove(id, index)
 ipcMain.handle('downloads-dir', () => downloads.dir)
 ipcMain.handle('downloads-open', async () => { fs.mkdirSync(downloads.dir, { recursive: true }); await shell.openPath(downloads.dir) })
 ipcMain.handle('downloads-choose-dir', async () => {
-  const r = await dialog.showOpenDialog(win, { title: 'Folder for downloads', defaultPath: downloads.dir, properties: ['openDirectory', 'createDirectory'] })
+  const r = await dialog.showOpenDialog(win, { title: t('Folder for downloads'), defaultPath: downloads.dir, properties: ['openDirectory', 'createDirectory'] })
   if (!r.canceled && r.filePaths[0]) downloads.setDir(r.filePaths[0])
   return downloads.dir
 })
@@ -326,7 +329,7 @@ ipcMain.on('mpv-bounds', (_, rect) => { playerRect = rect; placeMpv() })
 ipcMain.handle('mpv-available', hasMpv)
 ipcMain.handle('mpv-open', async () => {
   if (mpv) return mpv.ready
-  if (!hasMpv()) throw new Error(process.platform === 'win32' ? 'mpv is missing from this installation' : 'mpv needs the mpv package installed and an X11 session')
+  if (!hasMpv()) throw new Error(process.platform === 'win32' ? tk('mpv is missing from this installation') : tk('mpv needs the mpv package installed and an X11 session'))
   const handle = mpvHost().getNativeWindowHandle() // an HWND on Windows, an X11 window id on Linux
   const wid = handle.length >= 8 ? handle.readBigUInt64LE(0) : handle.readUInt32LE(0)
   const name = `kotakbase-mpv-${process.pid}-${++mpvCount}`
@@ -421,14 +424,17 @@ app.whenReady().then(() => {
 })
 // the page sends the setting at start and whenever it changes
 ipcMain.handle('close-to-tray', (_, on) => setTray(!!on))
+const trayMenu = () => Menu.buildFromTemplate([{ label: t('Open Kotakbase'), click: showWindow }, { type: 'separator' }, { label: t('Quit'), click: () => app.quit() }])
 function setTray (on) {
   if (!on) { tray?.destroy(); tray = null; return }
   if (tray) return
   tray = new Tray(nativeImage.createFromPath(path.join(dir, 'build', 'icon.png')).resize({ width: 32, height: 32 }))
   tray.setToolTip('Kotakbase')
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open Kotakbase', click: showWindow }, { type: 'separator' }, { label: 'Quit', click: () => app.quit() }]))
+  tray.setContextMenu(trayMenu())
   tray.on('click', showWindow)
 }
+// the page's language (Settings, or the system's), for the tray menu and dialogs
+ipcMain.on('language', async (_, code) => { await setLanguage(code); tray?.setContextMenu(trayMenu()) })
 
 // Updates: the newest release on GitHub (its latest.yml, betas included), downloaded in the background. The page
 // offers "Restart to update"; otherwise it installs silently the next time Kotakbase quits.

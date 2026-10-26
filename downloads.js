@@ -6,6 +6,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { findEpisode, pickFile, VIDEO, RISKY } from './episode.js'
 
+const tk = s => s // messages shown by the page, in the user's language (see main.js)
+
 // Which files of a torrent to download: one file asked for by index, one episode (the best match), or for several
 // episodes (a season pack) each one found by its number. [] when nothing matches.
 export function chooseFiles (files, { fileIndex, episodes }) {
@@ -139,9 +141,9 @@ export function createDownloads ({ client, store, defaultDir, trackers, isPlayin
     if (ours && it && path.resolve(it.dir) !== path.resolve(dir)) { await drop(t); t = await addTorrent(spec.link, it.dir) }
     const fail = async message => { if (ours) await client.remove(t, { destroyStore: true }); throw new Error(message) }
     const risky = t.files.filter(f => RISKY.test(f.name)).map(f => f.name)
-    if (risky.length) await fail(`This torrent contains program files (${risky.slice(0, 3).join(', ')}), a common sign of a fake or malware, so it won't be downloaded. Pick another source.`)
+    if (risky.length) await fail(tk("This torrent contains program files, a common sign of a fake or malware, so it won't be downloaded. Pick another source."))
     const picked = chooseFiles(t.files, spec)
-    if (!picked.length) await fail(spec.episodes.length > 1 ? "None of this show's episodes were found in this torrent. Pick another source." : "There's no video for this episode in this torrent. Pick another source.")
+    if (!picked.length) await fail(spec.episodes.length > 1 ? tk("None of this show's episodes were found in this torrent. Pick another source.") : tk("There's no video for this episode in this torrent. Pick another source."))
     if (!it) {
       it = { id: t.infoHash, mediaId: spec.mediaId, title: spec.title, cover: spec.cover, magnet: t.magnetURI, dir, status: 'active', files: [] }
       items.push(it)

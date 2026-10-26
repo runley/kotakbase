@@ -5,6 +5,7 @@ import { LANGS, SIGNS } from './lang.js'
 import { fromMal, malAnime } from './mal.js'
 import { createSync } from './anilist-sync.js'
 import { openRoom, parseCode, formatCode, inviteLink } from './room.js'
+import { t, setLanguage, pickLanguage, language, LANGUAGES } from './i18n.js'
 
 const $app = document.getElementById('app')
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
@@ -25,6 +26,10 @@ const unstore = key => { localStorage.removeItem(key); stored.delete(key) }
 // A brand-new install: every start saves the extension list (once extensions.js has booted them, after this runs),
 // so a profile without one has never run Kotakbase. Updated installs always have it.
 const firstLaunch = localStorage.getItem('extensions') === null
+// the app's language: Settings → Language, else the system's (when Kotakbase has it), else English
+await setLanguage(pickLanguage(load('language', null), navigator.languages))
+document.documentElement.lang = language()
+window.native.setLanguage(language())
 
 // ---- AniList ----
 const FIELDS = `id idMal title { romaji english native userPreferred } synonyms coverImage { large extraLarge color } bannerImage
@@ -133,10 +138,10 @@ function malFallback (id, urgent = false) {
   return malPending.get(id)
 }
 async function malDetails (id, urgent = false) {
-  if (!window.native.malClientId) throw new Error('MyAnimeList fallback is off (no Client ID)')
+  if (!window.native.malClientId) throw new Error(t('MyAnimeList fallback is off (no Client ID)'))
   const zip = await aniZip(id)
   const mal = cache.get(id)?.idMal ?? zip.mappings?.mal_id
-  if (!mal) throw new Error('No MyAnimeList id for this show')
+  if (!mal) throw new Error(t('No MyAnimeList id for this show'))
   const m = fromMal(id, await malAnime(mal, window.native.malClientId, { urgent }), zip)
   if (m.isAdult) throw new Error('Adult title')
   remember([m], 0)
@@ -223,6 +228,9 @@ const epCount = m => m.episodes ?? (m.nextAiringEpisode ? m.nextAiringEpisode.ep
 const airedCount = m => m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : epCount(m)
 const title = m => m.title.english ?? m.title.userPreferred ?? m.title.romaji
 const FORMAT = { TV: 'TV Series', TV_SHORT: 'TV Short', MOVIE: 'Movie', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Special' }
+const fmt = f => FORMAT[f] ? t(FORMAT[f]) : (f ?? '')
+const STATUS = { RELEASING: 'Releasing', FINISHED: 'Finished', NOT_YET_RELEASED: 'Not yet released', CANCELLED: 'Cancelled', HIATUS: 'On hiatus' }
+const SEASON = { WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall' }
 
 // ---- local state: list + watch progress ----
 const myList = () => load('list', [])
@@ -251,25 +259,26 @@ function toggleList (id) {
 function card (m, { nope } = {}) {
   const p = progress()[m.id]
   return `<a class="card" href="#/anime/${m.id}">
-    ${nope ? `<button class="card-x" data-nope="${m.id}" title="Not interested" aria-label="Not interested in ${esc(title(m))}">✕</button>` : ''}
+    ${nope ? `<button class="card-x" data-nope="${m.id}" title="${t('Not interested')}" aria-label="${t('Not interested in {title}', { title: esc(title(m)) })}">✕</button>` : ''}
     <img loading="lazy" src="${esc(m.coverImage.large)}" srcset="${esc(m.coverImage.large)} 230w, ${esc(m.coverImage.extraLarge)} 460w" sizes="clamp(140px, 7vw, 230px)" alt="">
     ${p ? `<div class="bar" style="width:${Math.min(100, (p.episode - 1 + p.time / (p.duration || 1)) / epCount(m) * 100)}%"></div>` : ''}
     <div class="t"><i style="background:${esc(m.coverImage.color ?? '#888')}"></i>${esc(title(m))}</div>
-    <div class="m"><span>${esc(m.seasonYear ?? m.startDate?.year ?? '')}</span><span>${esc(FORMAT[m.format] ?? m.format ?? '')}</span></div>
+    <div class="m"><span>${esc(m.seasonYear ?? m.startDate?.year ?? '')}</span><span>${esc(fmt(m.format))}</span></div>
   </a>`
 }
 // Rows of your own picks get "Surprise me" (opens a random one); Recommended cards get a "Not interested" ✕
 const SURPRISE = ['list', 'recommended']
-const surprise = kind => SURPRISE.includes(kind) ? `<button class="more surprise" data-surprise="${kind}">Surprise me</button>` : ''
+const surprise = kind => SURPRISE.includes(kind) ? `<button class="more surprise" data-surprise="${kind}">${t('Surprise me')}</button>` : ''
 // "Popular this season" leads with a lime tile, which also opens the full list, in place of the row's heading
 const seasonName = () => ['Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer', 'Summer', 'Summer', 'Fall', 'Fall', 'Fall', 'Winter'][new Date().getMonth()]
-const tile = () => `<a class="tile" href="#/more/season"><b>Popular this ${seasonName()}</b><span>The most-followed shows of the season</span><span class="tile-go">View all →</span></a>`
-const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2><span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">View More</a></span></div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' })).join('')}</div></section>` : ''
+const popularThis = () => ({ Winter: t('Popular this Winter'), Spring: t('Popular this Spring'), Summer: t('Popular this Summer'), Fall: t('Popular this Fall') })[seasonName()]
+const tile = () => `<a class="tile" href="#/more/season"><b>${popularThis()}</b><span>${t('The most-followed shows of the season')}</span><span class="tile-go">${t('View all →')}</span></a>`
+const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2><span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span></div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' })).join('')}</div></section>` : ''
 
 // "Your List" toggle: outlined bookmark, filled once saved
 const listButton = (m, cls) => {
   const inList = myList().includes(m.id)
-  return `<button class="${cls} list-btn ${inList ? 'on' : ''}" data-list="${m.id}" aria-pressed="${inList}" aria-label="Save to Your List" title="Save to Your List"><svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-6-4.5-6 4.5z"/></svg></button>`
+  return `<button class="${cls} list-btn ${inList ? 'on' : ''}" data-list="${m.id}" aria-pressed="${inList}" aria-label="${t('Save to Your List')}" title="${t('Save to Your List')}"><svg viewBox="0 0 24 24"><path d="M6 3.5h12v17l-6-4.5-6 4.5z"/></svg></button>`
 }
 const plain = s => (s ?? '').replace(/<[^>]*>/g, '')
 
@@ -279,16 +288,16 @@ function featureBox (m, p) {
   const single = epCount(m) === 1 // a movie or one-off: no episode number
   const left = p && p.duration > 1 && p.time > 0 ? Math.max(1, Math.round((p.duration - p.time) / 60)) : 0
   const pct = p && p.duration > 1 ? Math.min(100, p.time / p.duration * 100) : 0
-  const about = [m.seasonYear ?? m.startDate?.year, FORMAT[m.format] ?? m.format, ...(m.genres ?? []).slice(0, 3)].filter(Boolean).join(' · ')
+  const about = [m.seasonYear ?? m.startDate?.year, fmt(m.format), ...(m.genres ?? []).slice(0, 3).map(g => t(g))].filter(Boolean).join(' · ')
   return `<img class="box-cover" src="${esc(m.coverImage.extraLarge)}" alt="">
     <div class="box-body">
-      <span class="kicker">${p ? 'Continue watching' : 'Trending now'}</span>
+      <span class="kicker">${p ? t('Continue watching') : t('Trending now')}</span>
       <h1><a href="#/anime/${m.id}">${esc(title(m))}</a></h1>
-      <p class="muted">${p ? `${single ? 'Movie' : `Episode ${ep}`}${left ? ` · ${left} min left` : ''}` : esc(about)}</p>
+      <p class="muted">${p ? `${single ? t('Movie') : t('Episode {n}', { n: ep })}${left ? ` · ${t('{n} min left', { n: left })}` : ''}` : esc(about)}</p>
       ${p ? `<div class="meter" aria-hidden="true"><i style="width:${pct}%"></i></div>` : ''}
       <div class="actions">
-        <button class="btn" data-watch="${m.id}">${p ? (single ? 'Resume' : `Resume episode ${ep}`) : 'Watch now'}</button>
-        <a class="btn ghost" href="#/anime/${m.id}">All episodes</a>
+        <button class="btn" data-watch="${m.id}">${p ? (single ? t('Resume') : t('Resume episode {n}', { n: ep })) : t('Watch now')}</button>
+        <a class="btn ghost" href="#/anime/${m.id}">${t('All episodes')}</a>
         ${listButton(m, 'sq')}
       </div>
     </div>`
@@ -299,10 +308,10 @@ function todayBox (items) {
   const end = new Date()
   end.setHours(24, 0, 0, 0)
   const list = items.filter(s => s.airingAt * 1000 < end).slice(0, 5)
-  const time = at => new Date(at * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-  return `<h2>Airing today</h2>
-    ${list.map(s => `<a class="today" href="#/anime/${s.media.id}"><time>${time(s.airingAt)}</time><span><b>${esc(title(s.media))}</b><span class="muted">Episode ${s.episode}${s.airingAt * 1000 < Date.now() ? ' · out now' : ''}</span></span></a>`).join('') || '<p class="muted">None of your shows air today.</p>'}
-    <a class="more" href="#/schedule">Full schedule →</a>`
+  const time = at => new Date(at * 1000).toLocaleTimeString(language(), { hour: 'numeric', minute: '2-digit' })
+  return `<h2>${t('Airing today')}</h2>
+    ${list.map(s => `<a class="today" href="#/anime/${s.media.id}"><time>${time(s.airingAt)}</time><span><b>${esc(title(s.media))}</b><span class="muted">${t('Episode {n}', { n: s.episode })}${s.airingAt * 1000 < Date.now() ? ` · ${t('out now')}` : ''}</span></span></a>`).join('') || `<p class="muted">${t('None of your shows air today.')}</p>`}
+    <a class="more" href="#/schedule">${t('Full schedule →')}</a>`
 }
 
 async function home () {
@@ -310,20 +319,20 @@ async function home () {
   // your own rows say they're loading when they have shows to show, and count MyAnimeList's progress if AniList is down
   const loading = (k, done, total) => {
     const p = $app.querySelector(`[data-row="${k}"] [data-loading]`)
-    if (p) p.textContent = `AniList isn't responding, so these come from MyAnimeList one show at a time: ${done} of ${total}…`
+    if (p) p.textContent = t("AniList isn't responding, so these come from MyAnimeList one show at a time: {done} of {total}…", { done, total })
   }
   const cont = continueWatching((done, total) => loading(0, done, total))
   const rows = [
-    ['Continue Watching', cont.then(l => l.slice(0, ROW_LIMIT)), 'continue'],
-    ['Popular This Season', seasonal(), 'season'],
-    ['Your List', byIds(myList().slice(0, ROW_LIMIT), (done, total) => loading(2, done, total)), 'list'],
-    ['Recommended For You', recommended().catch(() => []), 'recommended'],
-    ['Trending Now', trending(), 'trending'],
-    ['All Time Popular', allTimePopular(), 'popular']
+    [t('Continue Watching'), cont.then(l => l.slice(0, ROW_LIMIT)), 'continue'],
+    [popularThis(), seasonal(), 'season'],
+    [t('Your List'), byIds(myList().slice(0, ROW_LIMIT), (done, total) => loading(2, done, total)), 'list'],
+    [t('Recommended For You'), recommended().catch(() => []), 'recommended'],
+    [t('Trending Now'), trending(), 'trending'],
+    [t('All Time Popular'), allTimePopular(), 'popular']
   ]
   const hasShows = [Object.values(progress()).some(p => !p.hidden), false, myList().length > 0]
-  $app.innerHTML = `<section class="bento" aria-label="Overview"><div class="box box-feature"></div><div class="box box-today"><h2>Airing today</h2><p class="muted">Loading…</p></div></section>
-    ${rows.map(([name], k) => `<div data-row="${k}">${hasShows[k] ? `<section class="row"><h2>${esc(name)}</h2><p class="muted" data-loading>Loading…</p></section>` : ''}</div>`).join('')}`
+  $app.innerHTML = `<section class="bento" aria-label="${t('Overview')}"><div class="box box-feature"></div><div class="box box-today"><h2>${t('Airing today')}</h2><p class="muted">${t('Loading…')}</p></div></section>
+    ${rows.map(([name], k) => `<div data-row="${k}">${hasShows[k] ? `<section class="row"><h2>${esc(name)}</h2><p class="muted" data-loading>${t('Loading…')}</p></section>` : ''}</div>`).join('')}`
   const bento = $app.firstElementChild // this drawing of the page, to notice it was replaced meanwhile
   const filled = rows.map(([name, list, kind], k) => list.then(l => row(name, l, kind), e => `<section class="row"><h2>${esc(name)}</h2><p class="err">${esc(e.message)}</p></section>`)
     .then(html => { if (bento.isConnected) $app.querySelector(`[data-row="${k}"]`).outerHTML = html }))
@@ -336,7 +345,7 @@ async function home () {
   })
   const today = bento.querySelector('.box-today')
   weekSchedule(false).then(items => { if (bento.isConnected) today.innerHTML = todayBox(items) },
-    () => { if (bento.isConnected) today.innerHTML = '<h2>Airing today</h2><p class="muted">The schedule isn\'t available right now.</p><a class="more" href="#/schedule">Full schedule →</a>' })
+    () => { if (bento.isConnected) today.innerHTML = `<h2>${t('Airing today')}</h2><p class="muted">${t("The schedule isn't available right now.")}</p><a class="more" href="#/schedule">${t('Full schedule →')}</a>` })
   await Promise.all(filled) // the router restores the scroll position once the rows are there
 }
 
@@ -361,7 +370,7 @@ async function recommended () {
     // your star rating weighs a show: 5★ counts three times, unrated once, 1★ counts against its genres and tags
     const w = rated[m.id] ? rated[m.id] - 2 : 1
     m.genres.forEach(g => bump(genres, g, w))
-    m.tags.filter(t => !t.isMediaSpoiler).slice(0, 5).forEach(t => bump(tags, t.name, w)) // AniList lists a show's most fitting tags first
+    m.tags.filter(tag => !tag.isMediaSpoiler).slice(0, 5).forEach(tag => bump(tags, tag.name, w)) // AniList lists a show's most fitting tags first
   }
   const most = (map, n) => [...map].sort((x, y) => y[1] - x[1]).slice(0, n).map(([k]) => k)
   // the top genres pick the candidates (tags are too narrow to search by); the tags then put the closest first
@@ -397,17 +406,18 @@ async function checkNewEpisodes () {
   // one notification however many came out, so they don't pile up on the desktop
   if (fresh.length === 1) {
     const [[m, n]] = fresh
-    const note = new Notification(title(m), { body: `Episode ${n} is out`, icon: m.coverImage.extraLarge })
+    const note = new Notification(title(m), { body: t('Episode {n} is out', { n }), icon: m.coverImage.extraLarge })
     note.onclick = () => { window.native.focus(); location.hash = `#/anime/${m.id}` }
   } else if (fresh.length) {
-    const note = new Notification('New episodes', { body: newEpisodesText(fresh.map(([m]) => title(m))), icon: fresh[0][0].coverImage.extraLarge })
+    const note = new Notification(t('New episodes'), { body: newEpisodesText(fresh.map(([m]) => title(m))), icon: fresh[0][0].coverImage.extraLarge })
     note.onclick = () => { window.native.focus(); location.hash = '#/' } // Continue Watching / Your List are at the top
   }
 }
 // "A and B", "A, B and C", "A, B and 3 more"
 function newEpisodesText (names) {
-  if (names.length <= 3) return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
-  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`
+  const list = new Intl.ListFormat(language(), { type: 'conjunction' })
+  if (names.length <= 3) return list.format(names)
+  return t('{names} and {n} more', { names: names.slice(0, 2).join(', '), n: names.length - 2 })
 }
 setTimeout(() => { checkNewEpisodes().catch(() => {}); setInterval(() => checkNewEpisodes().catch(() => {}), 30 * 60 * 1000) }, 15000)
 window.native.closeToTray(load('closeToTray', true)) // Settings → Closing the window
@@ -415,7 +425,7 @@ window.native.closeToTray(load('closeToTray', true)) // Settings → Closing the
 window.native.on('hidden', () => {
   if (load('trayHint', false)) return
   save('trayHint', true)
-  new Notification('Kotakbase is still running', { body: 'It\'s in the tray by the clock, still checking for new episodes. Right-click its icon to quit.' })
+  new Notification(t('Kotakbase is still running'), { body: t("It's in the tray by the clock, still checking for new episodes. Right-click its icon to quit.") })
 })
 
 // The next 7 days of episodes from the start of today, for the shows you follow or (all) everything airing; asked once
@@ -443,35 +453,35 @@ function weekSchedule (all) {
 async function schedulePage () {
   const all = !!history.state?.scheduleAll
   const ids = followedIds()
-  const tabs = `<div class="tabbar"><button class="${all ? '' : 'on'}" data-all="">Following</button><button class="${all ? 'on' : ''}" data-all="1">All airing</button></div>`
-  $app.innerHTML = `<div class="page hist-page"><h2>Schedule</h2>${tabs}<p class="muted">Loading…</p></div>`
+  const tabs = `<div class="tabbar"><button class="${all ? '' : 'on'}" data-all="">${t('Following')}</button><button class="${all ? 'on' : ''}" data-all="1">${t('All airing')}</button></div>`
+  $app.innerHTML = `<div class="page hist-page"><h2>${t('Schedule')}</h2>${tabs}<p class="muted">${t('Loading…')}</p></div>`
   $app.onclick = e => { const b = e.target.closest('[data-all]'); if (b) { history.replaceState({ ...history.state, scheduleAll: !!b.dataset.all }, ''); schedulePage() } }
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const items = await weekSchedule(all)
   if (location.hash !== '#/schedule' || !!history.state?.scheduleAll !== all) return // moved on meanwhile
-  const day = at => { const d = Math.round((new Date(at * 1000).setHours(0, 0, 0, 0) - today) / 864e5); return d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : new Date(at * 1000).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) }
-  const until = at => { const s = at - Date.now() / 1000; return s <= 0 ? 'Aired' : s < 3600 ? `in ${Math.ceil(s / 60)}m` : s < 86400 ? `in ${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : '' }
+  const day = at => { const d = Math.round((new Date(at * 1000).setHours(0, 0, 0, 0) - today) / 864e5); return d === 0 ? t('Today') : d === 1 ? t('Tomorrow') : new Date(at * 1000).toLocaleDateString(language(), { weekday: 'long', month: 'long', day: 'numeric' }) }
+  const until = at => { const s = at - Date.now() / 1000; return s <= 0 ? t('Aired') : s < 3600 ? t('in {m}m', { m: Math.ceil(s / 60) }) : s < 86400 ? t('in {h}h {m}m', { h: Math.floor(s / 3600), m: Math.floor(s % 3600 / 60) }) : '' }
   let html = ''
   let current = ''
   for (const s of items) {
     if (day(s.airingAt) !== current) { current = day(s.airingAt); html += `<h3 class="hist-day">${esc(current)}</h3>` }
     html += `<a class="hist" href="#/anime/${s.media.id}">
       <img src="${esc(s.media.coverImage.large)}" alt="" loading="lazy">
-      <span class="hist-main"><b>${esc(title(s.media))}</b><span class="muted">Episode ${s.episode}${s.media.episodes ? ` of ${s.media.episodes}` : ''}</span></span>
-      <time>${new Date(s.airingAt * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}<br><span class="muted">${until(s.airingAt)}</span></time>
+      <span class="hist-main"><b>${esc(title(s.media))}</b><span class="muted">${s.media.episodes ? t('Episode {n} of {total}', { n: s.episode, total: s.media.episodes }) : t('Episode {n}', { n: s.episode })}</span></span>
+      <time>${new Date(s.airingAt * 1000).toLocaleTimeString(language(), { hour: 'numeric', minute: '2-digit' })}<br><span class="muted">${until(s.airingAt)}</span></time>
     </a>`
   }
-  const empty = all ? 'Nothing airing this week.' : ids.length ? 'None of your shows air in the next 7 days.' : 'Shows in Continue Watching or Your List that are airing show up here.'
-  $app.querySelector('.page').innerHTML = `<h2>Schedule</h2>${tabs}${html || `<p class="muted">${empty}</p>`}`
+  const empty = all ? t('Nothing airing this week.') : ids.length ? t('None of your shows air in the next 7 days.') : t('Shows in Continue Watching or Your List that are airing show up here.')
+  $app.querySelector('.page').innerHTML = `<h2>${t('Schedule')}</h2>${tabs}${html || `<p class="muted">${empty}</p>`}`
 }
 
 // History page: every watched episode, newest first, grouped by day
 async function historyPage () {
   const history = load('history', []).slice().reverse()
-  $app.innerHTML = '<div class="page"><h2>History</h2><p class="muted">Loading…</p></div>'
+  $app.innerHTML = `<div class="page"><h2>${t('History')}</h2><p class="muted">${t('Loading…')}</p></div>`
   const shows = new Map((await byIds([...new Set(history.map(h => h.id))])).map(m => [m.id, m]))
-  const day = at => new Date(at).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const day = at => new Date(at).toLocaleDateString(language(), { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   let html = ''
   let current = ''
   for (const h of history) {
@@ -480,11 +490,11 @@ async function historyPage () {
     if (day(h.at) !== current) { current = day(h.at); html += `<h3 class="hist-day">${esc(current)}</h3>` }
     html += `<a class="hist" href="#/anime/${m.id}">
       <img src="${esc(m.coverImage.large)}" alt="" loading="lazy">
-      <span class="hist-main"><b>${esc(title(m))}</b><span class="muted">Episode ${h.episode}${h.finished ? ' <span class="badge">Finished</span>' : ''}</span></span>
-      <time>${new Date(h.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time>
+      <span class="hist-main"><b>${esc(title(m))}</b><span class="muted">${t('Episode {n}', { n: h.episode })}${h.finished ? ` <span class="badge">${t('Finished')}</span>` : ''}</span></span>
+      <time>${new Date(h.at).toLocaleTimeString(language(), { hour: 'numeric', minute: '2-digit' })}</time>
     </a>`
   }
-  $app.innerHTML = `<div class="page hist-page"><h2>History</h2>${html || '<p class="muted">Episodes you watch show up here.</p>'}</div>`
+  $app.innerHTML = `<div class="page hist-page"><h2>${t('History')}</h2>${html || `<p class="muted">${t('Episodes you watch show up here.')}</p>`}</div>`
 }
 
 // "View More": a home row in full. AniList rows show their top 100; your own rows (progress, list) show everything.
@@ -498,13 +508,14 @@ const MORE = {
   popular: ['All Time Popular', () => allTimePopular(100)]
 }
 async function morePage (kind) {
-  const [name, load] = MORE[kind] ?? MORE.trending
-  $app.innerHTML = `<div class="page"><h2>${esc(name)}</h2><p class="muted">Loading…</p></div>`
+  const [key, load] = MORE[kind] ?? MORE.trending
+  const name = kind === 'season' ? popularThis() : t(key)
+  $app.innerHTML = `<div class="page"><h2>${esc(name)}</h2><p class="muted">${t('Loading…')}</p></div>`
   const list = await load()
   // shows taken out of Continue Watching can be found (and opened, then put back) from there
-  const hiddenLink = kind === 'continue' && Object.values(progress()).some(p => p.hidden) ? '<a class="more" href="#/more/hidden">Removed shows</a>' : ''
-  const help = kind === 'hidden' ? '<p class="muted">Open a show and press ↺ to put it back. Watching it again also brings it back.</p>' : ''
-  $app.innerHTML = `<div class="page"><div class="row-head"><h2>${esc(name)}</h2><span class="row-links">${hiddenLink}${list.length ? surprise(kind) : ''}</span></div>${help}<div class="grid">${list.map(m => card(m, { nope: kind === 'recommended' })).join('') || '<p class="muted">Nothing here yet.</p>'}</div></div>`
+  const hiddenLink = kind === 'continue' && Object.values(progress()).some(p => p.hidden) ? `<a class="more" href="#/more/hidden">${t('Removed shows')}</a>` : ''
+  const help = kind === 'hidden' ? `<p class="muted">${t('Open a show and press ↺ to put it back. Watching it again also brings it back.')}</p>` : ''
+  $app.innerHTML = `<div class="page"><div class="row-head"><h2>${esc(name)}</h2><span class="row-links">${hiddenLink}${list.length ? surprise(kind) : ''}</span></div>${help}<div class="grid">${list.map(m => card(m, { nope: kind === 'recommended' })).join('') || `<p class="muted">${t('Nothing here yet.')}</p>`}</div></div>`
 }
 
 // Search page filters: [key, label, AniList argument, its GraphQL type, options as [value, label]]
@@ -513,7 +524,7 @@ const thisYear = new Date().getFullYear()
 const FILTERS = [
   ['genre', 'Genre', 'genre', 'String', GENRES.map(g => [g, g])],
   ['year', 'Year', 'startDate_like', 'String', Array.from({ length: thisYear + 2 - 1960 }, (_, i) => String(thisYear + 1 - i)).map(y => [y + '%', y])],
-  ['season', 'Season', 'season', 'MediaSeason', [['WINTER', 'Winter'], ['SPRING', 'Spring'], ['SUMMER', 'Summer'], ['FALL', 'Fall']]],
+  ['season', 'Season', 'season', 'MediaSeason', Object.entries(SEASON)],
   ['format', 'Format', 'format', 'MediaFormat', Object.entries(FORMAT)],
   ['status', 'Status', 'status', 'MediaStatus', [['RELEASING', 'Airing'], ['FINISHED', 'Finished'], ['NOT_YET_RELEASED', 'Not yet aired']]],
   ['sort', 'Sort', null, null, [['POPULARITY_DESC', 'Popularity'], ['SCORE_DESC', 'Score'], ['TRENDING_DESC', 'Trending'], ['START_DATE_DESC', 'Newest'], ['TITLE_ROMAJI', 'Title']]]
@@ -521,13 +532,13 @@ const FILTERS = [
 async function search () {
   // what was searched is kept in this page's history entry, so Back from a show returns to the same results
   const state = { q: '', ...history.state?.search }
-  $app.innerHTML = `<div class="page"><input class="search-input" placeholder="Search anime…" autofocus aria-label="Search anime" value="${esc(state.q)}">
-    <div class="filters">${FILTERS.map(([key, label, , , options]) => `<label><span>${label}</span><select data-filter="${key}"><option value="">${key === 'sort' ? 'Best match' : 'Any'}</option>${options.map(([v, l]) => `<option value="${esc(v)}" ${state[key] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`).join('')}
-      ${state.tag ? `<button class="chip tag-filter" data-clear-tag aria-label="Remove tag filter ${esc(state.tag)}">Tag: ${esc(state.tag)} ✕</button>` : ''}</div>
+  $app.innerHTML = `<div class="page"><input class="search-input" placeholder="${t('Search anime…')}" autofocus aria-label="${t('Search anime')}" value="${esc(state.q)}">
+    <div class="filters">${FILTERS.map(([key, label, , , options]) => `<label><span>${t(label)}</span><select data-filter="${key}"><option value="">${key === 'sort' ? t('Best match') : t('Any')}</option>${options.map(([v, l]) => `<option value="${esc(v)}" ${state[key] === v ? 'selected' : ''}>${esc(key === 'year' ? l : t(l))}</option>`).join('')}</select></label>`).join('')}
+      ${state.tag ? `<button class="chip tag-filter" data-clear-tag aria-label="${t('Remove tag filter {tag}', { tag: esc(state.tag) })}">${t('Tag: {tag}', { tag: esc(state.tag) })} ✕</button>` : ''}</div>
     <div class="grid"></div></div>`
   const input = $app.querySelector('input')
   const grid = $app.querySelector('.grid')
-  let t
+  let timer
   let runId = 0
   const run = async () => {
     const id = ++runId
@@ -541,9 +552,9 @@ async function search () {
     // nothing typed or picked: trending, as before; with only filters, the most popular match first
     const list = !args.length && !state.sort ? await trending() : await page([`sort: ${state.sort || (state.q ? 'SEARCH_MATCH' : 'POPULARITY_DESC')}`, ...args].join(', '), vars.join(', '), variables, { perPage: 50, fields: LIST_FIELDS }).then(remember)
     if (id !== runId) return // a newer search finished first
-    grid.innerHTML = list.map(card).join('') || `<p class="muted">Nothing found${filtered ? ' with these filters' : ''}.</p>`
+    grid.innerHTML = list.map(card).join('') || `<p class="muted">${filtered ? t('Nothing found with these filters.') : t('Nothing found.')}</p>`
   }
-  input.oninput = () => { state.q = input.value.trim(); clearTimeout(t); t = setTimeout(run, 350) }
+  input.oninput = () => { state.q = input.value.trim(); clearTimeout(timer); timer = setTimeout(run, 350) }
   $app.onchange = e => { const k = e.target.dataset.filter; if (k) { state[k] = e.target.value; run() } }
   $app.onclick = e => { const b = e.target.closest('[data-clear-tag]'); if (b) { delete state.tag; b.remove(); run() } }
   run()
@@ -552,7 +563,7 @@ async function search () {
 const ago = date => {
   const days = (new Date(date) - Date.now()) / 864e5
   if (!isFinite(days)) return ''
-  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+  const rtf = new Intl.RelativeTimeFormat(language(), { numeric: 'auto' })
   const a = Math.abs(days)
   return a >= 365 ? rtf.format(Math.round(days / 365), 'year') : a >= 30 ? rtf.format(Math.round(days / 30), 'month') : rtf.format(Math.round(days), 'day')
 }
@@ -560,9 +571,9 @@ const ago = date => {
 // Your 1-5 star rating of a show (feeds Recommended); shown once you've started it, and asked for once you finish it
 function ratingStars (m) {
   const r = ratings()[m.id] ?? 0
-  const label = r ? 'Your rating' : isFinished(m) ? 'Finished! How was it?' : 'Rate it'
-  return `<div class="stars" role="group" aria-label="Your rating"><span class="muted">${label}</span>${[1, 2, 3, 4, 5].map(n =>
-    `<button class="${n <= r ? 'on' : ''}" data-rate="${n}" aria-label="${n} star${n > 1 ? 's' : ''}" aria-pressed="${n === r}" title="${n === r ? 'Clear rating' : n + ' / 5'}">★</button>`).join('')}</div>`
+  const label = r ? t('Your rating') : isFinished(m) ? t('Finished! How was it?') : t('Rate it')
+  return `<div class="stars" role="group" aria-label="${t('Your rating')}"><span class="muted">${label}</span>${[1, 2, 3, 4, 5].map(n =>
+    `<button class="${n <= r ? 'on' : ''}" data-rate="${n}" aria-label="${t('{n} stars', { n })}" aria-pressed="${n === r}" title="${n === r ? t('Clear rating') : n + ' / 5'}">★</button>`).join('')}</div>`
 }
 
 // Episode cards (thumbnail, runtime, rating, title, progress, summary, air date), used on the show page and in the
@@ -574,7 +585,7 @@ function episodeCards (m, zip, highlight) {
   const movie = m.format === 'MOVIE' && epCount(m) === 1 // one big card with the wide, sharper banner art
   return Array.from({ length: epCount(m) }, (_, k) => k + 1).map(n => {
     const e = zip.episodes?.[n] ?? {}
-    const name = e.title?.en ?? e.title?.['x-jat'] ?? `Episode ${n}`
+    const name = e.title?.en ?? e.title?.['x-jat'] ?? t('Episode {n}', { n })
     const len = e.runtime ?? e.length ?? m.duration
     return `<button class="epc ${n === highlight ? 'current' : ''} ${movie ? 'movie' : ''}" data-ep="${n}">
         <div class="thumb" style="background-image:url('${esc((movie && m.bannerImage) || e.image || m.coverImage.extraLarge)}')">
@@ -595,7 +606,7 @@ async function detail (id) {
   const p = progress()[id]
   const current = p?.episode ?? 1
   const total = epCount(m)
-  const status = m.status === 'RELEASING' ? 'Releasing' : (m.status ?? '').toLowerCase().replace(/^./, c => c.toUpperCase())
+  const status = STATUS[m.status] ? t(STATUS[m.status]) : (m.status ?? '')
   $app.innerHTML = `<div class="show-banner" style="background-image:url('${esc(m.bannerImage ?? m.coverImage.extraLarge)}')"></div>
   <div class="show">
     <div class="show-head">
@@ -604,29 +615,29 @@ async function detail (id) {
         <div class="show-native">${esc(m.title.native)}</div>
         <h1>${esc(title(m))}</h1>
         <div class="tags">
-          <span class="pill">${p ? `${Math.min(current, total)} / ` : ''}${total} Episodes</span>
-          <span class="pill">${esc(FORMAT[m.format] ?? m.format)}</span>
+          <span class="pill">${p ? `${Math.min(current, total)} / ${t('{n} episodes', { n: total })}` : t('{n} episodes', { n: total })}</span>
+          <span class="pill">${esc(fmt(m.format))}</span>
           <span class="pill">${esc(status)}</span>
-          ${m.season ? `<span class="pill">${esc(m.season[0] + m.season.slice(1).toLowerCase())} ${m.seasonYear}</span>` : ''}
+          ${m.season ? `<span class="pill">${esc(SEASON[m.season] ? t(SEASON[m.season]) : m.season)} ${m.seasonYear}</span>` : ''}
           ${m.averageScore ? `<span class="pill score">${m.averageScore}%</span>` : ''}
         </div>
         <p class="show-desc">${esc(plain(m.description))}</p>
       </div>
     </div>
     <div class="show-actions">
-      <button class="btn" data-ep="${current}">▶ ${p ? `Continue · Ep ${current}` : 'Watch'}</button>
+      <button class="btn" data-ep="${current}">▶ ${p ? t('Continue · Ep {n}', { n: current }) : t('Watch')}</button>
       ${listButton(m, 'sq')}
-      ${inContinueWatching(m) ? '<button class="sq" data-hide-continue title="Remove from Continue Watching" aria-label="Remove from Continue Watching"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>' : ''}
-      ${!isFinished(m) && m.status !== 'NOT_YET_RELEASED' && !(p?.episode > airedCount(m)) ? `<button class="sq" data-watched-all title="Already watched: mark every episode watched" aria-label="Already watched"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>` : ''}
-      ${p?.hidden && !isFinished(m) ? '<button class="sq" data-unhide title="Put back in Continue Watching" aria-label="Put back in Continue Watching"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button>' : ''}
-      <button class="sq" data-download-season title="Download episodes to watch offline" aria-label="Download episodes">${DL_ICON}</button>
+      ${inContinueWatching(m) ? `<button class="sq" data-hide-continue title="${t('Remove from Continue Watching')}" aria-label="${t('Remove from Continue Watching')}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>` : ''}
+      ${!isFinished(m) && m.status !== 'NOT_YET_RELEASED' && !(p?.episode > airedCount(m)) ? `<button class="sq" data-watched-all title="${t('Already watched: mark every episode watched')}" aria-label="${t('Already watched')}"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>` : ''}
+      ${p?.hidden && !isFinished(m) ? `<button class="sq" data-unhide title="${t('Put back in Continue Watching')}" aria-label="${t('Put back in Continue Watching')}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button>` : ''}
+      <button class="sq" data-download-season title="${t('Download episodes to watch offline')}" aria-label="${t('Download episodes')}">${DL_ICON}</button>
       ${p ? ratingStars(m) : ''}
     </div>
     <div class="chips">
-      ${m.genres.map(g => `<button class="chip genre" data-genre="${esc(g)}" title="Search ${esc(g)} anime">${esc(g)}</button>`).join('')}
-      ${m.tags.filter(t => !t.isMediaSpoiler).map(t => `<button class="chip" data-tag="${esc(t.name)}" title="Search anime tagged ${esc(t.name)}">${esc(t.name)}</button>`).join('')}
+      ${m.genres.map(g => `<button class="chip genre" data-genre="${esc(g)}" title="${t('Search {genre} anime', { genre: esc(t(g)) })}">${esc(t(g))}</button>`).join('')}
+      ${m.tags.filter(tag => !tag.isMediaSpoiler).map(tag => `<button class="chip" data-tag="${esc(tag.name)}" title="${t('Search anime tagged {tag}', { tag: esc(tag.name) })}">${esc(tag.name)}</button>`).join('')}
     </div>
-    <div class="tabbar"><button class="on" data-tab="eps">Episodes</button><button data-tab="related">Related</button><button data-tab="similar">Similar</button></div>
+    <div class="tabbar"><button class="on" data-tab="eps">${t('Episodes')}</button><button data-tab="related">${t('Related')}</button><button data-tab="similar">${t('Similar')}</button></div>
     <div class="eps">${episodeCards(m, zip, current)}</div>
     <div class="grid" data-panel="related" hidden></div>
     <div class="grid" data-panel="similar" hidden></div>
@@ -635,14 +646,14 @@ async function detail (id) {
   // the open tab is kept in this page's history entry, so coming back to the page reopens it
   const showTab = tab => {
     history.replaceState({ ...history.state, tab }, '')
-    $app.querySelectorAll('[data-tab]').forEach(t => t.classList.toggle('on', t.dataset.tab === tab))
+    $app.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab))
     $app.querySelector('.eps').hidden = tab !== 'eps'
     $app.querySelectorAll('[data-panel]').forEach(g => { g.hidden = g.dataset.panel !== tab })
     const grid = $app.querySelector(`[data-panel="${tab}"]`)
     if (grid && !grid.dataset.loaded) {
       grid.dataset.loaded = 1
-      grid.innerHTML = '<p class="muted">Loading…</p>'
-      ;({ similar, related })[tab](m.id).then(list => { grid.innerHTML = list.map(card).join('') || `<p class="muted">No ${tab} anime found.</p>` },
+      grid.innerHTML = `<p class="muted">${t('Loading…')}</p>`
+      ;({ similar, related })[tab](m.id).then(list => { grid.innerHTML = list.map(card).join('') || `<p class="muted">${tab === 'similar' ? t('No similar anime found.') : t('No related anime found.')}</p>` },
         err => { delete grid.dataset.loaded; grid.innerHTML = `<p class="err">${esc(err.message)}</p>` })
     }
   }
@@ -692,8 +703,8 @@ async function detail (id) {
     e.preventDefault()
     const n = +b.dataset.ep
     contextMenu(e, [
-      [`Mark watched up to episode ${n}`, () => markWatched(m, n)],
-      [`Mark unwatched from episode ${n}`, () => markUnwatched(m, n)]
+      [t('Mark watched up to episode {n}', { n }), () => markWatched(m, n)],
+      [t('Mark unwatched from episode {n}', { n }), () => markUnwatched(m, n)]
     ], route)
   }
 }
@@ -728,19 +739,19 @@ async function extensionsPage () {
   await ext.ready.catch(() => {})
   const list = Object.values(ext.configs)
   $app.innerHTML = `<div class="page">
-    <h2>Extensions</h2>
-    <p class="muted">Paste a Hayase extension manifest URL (https://…/index.json, gh:user/repo or npm:package).</p>
-    <form class="add"><input placeholder="Manifest URL" aria-label="Manifest URL" required><button class="btn">Add</button></form>
+    <h2>${t('Extensions')}</h2>
+    <p class="muted">${t('Paste a Hayase extension manifest URL (https://…/index.json, gh:user/repo or npm:package).')}</p>
+    <form class="add"><input placeholder="${t('Manifest URL')}" aria-label="${t('Manifest URL')}" required><button class="btn">${t('Add')}</button></form>
     <div class="err" id="ext-err"></div>
-    ${list.length ? '' : '<p class="muted">No extensions installed.</p>'}
+    ${list.length ? '' : `<p class="muted">${t('No extensions installed.')}</p>`}
     ${list.map(c => {
       const s = ext.settings[c.id]
       return `<div class="ext">
         <img src="${esc(c.icon)}" alt="">
         <div class="grow">
-          <b>${esc(c.name)}</b> <span class="muted">v${esc(c.version)} · ${esc(c.type)} · ${esc(c.media ?? '')} · ${esc(c.accuracy)} accuracy</span>${c.deprecated ? '<span class="badge">Deprecated</span>' : ''}
+          <b>${esc(c.name)}</b> <span class="muted">v${esc(c.version)} · ${esc(c.type)} · ${esc(c.media ?? '')} · ${t('{level} accuracy', { level: esc(t(c.accuracy)) })}</span>${c.deprecated ? `<span class="badge">${t('Deprecated')}</span>` : ''}
           <div class="muted">${esc(c.description ?? '')}</div>
-          ${c.type !== 'torrent' ? '<div class="muted">Only torrent extensions are used by Kotakbase.</div>' : ''}
+          ${c.type !== 'torrent' ? `<div class="muted">${t('Only torrent extensions are used by Kotakbase.')}</div>` : ''}
           ${Object.entries(c.options ?? {}).map(([k, o]) => `<label>${esc(o.description ?? k)}
             ${o.type === 'boolean'
               ? `<input type="checkbox" data-opt="${esc(c.id)}" data-key="${esc(k)}" ${(s.options[k] ?? o.default) ? 'checked' : ''}>`
@@ -749,22 +760,22 @@ async function extensionsPage () {
                 : `<input type="${o.type === 'number' ? 'number' : 'text'}" data-opt="${esc(c.id)}" data-key="${esc(k)}" value="${esc(s.options[k] ?? o.default ?? '')}">`}
           </label>`).join('')}
         </div>
-        <label><input type="checkbox" data-enable="${esc(c.id)}" ${s.enabled ? 'checked' : ''}> Enabled</label>
-        <button class="btn ghost" data-remove="${esc(c.id)}">Delete</button>
+        <label><input type="checkbox" data-enable="${esc(c.id)}" ${s.enabled ? 'checked' : ''}> ${t('Enabled')}</label>
+        <button class="btn ghost" data-remove="${esc(c.id)}">${t('Delete')}</button>
       </div>`
     }).join('')}
   </div>`
   $app.querySelector('form').onsubmit = async e => {
     e.preventDefault()
     const err = document.getElementById('ext-err')
-    err.textContent = 'Installing…'
+    err.textContent = t('Installing…')
     try { await ext.importRepo(e.target.querySelector('input').value) } catch (x) { return extensionsPage().then(() => { document.getElementById('ext-err').textContent = x.message }) }
     extensionsPage()
   }
   $app.onchange = e => {
-    const t = e.target
-    if (t.dataset.enable) ext.setEnabled(t.dataset.enable, t.checked)
-    if (t.dataset.opt) ext.setOption(t.dataset.opt, t.dataset.key, t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value)
+    const el = e.target
+    if (el.dataset.enable) ext.setEnabled(el.dataset.enable, el.checked)
+    if (el.dataset.opt) ext.setOption(el.dataset.opt, el.dataset.key, el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value)
   }
   $app.onclick = e => { const id = e.target.closest('[data-remove]')?.dataset.remove; if (id) { ext.remove(id); extensionsPage() } }
 }
@@ -772,40 +783,43 @@ async function extensionsPage () {
 // Ordered language preferences: the player uses the first one a release actually has.
 function settingsPage () {
   // the subtitle list can also hold "Signs & Songs" (on-screen text and lyrics only), ranked like a language
-  const names = { ...Object.fromEntries(Object.entries(LANGS).map(([k, [n]]) => [k, n])), [SIGNS]: 'Signs & Songs' }
+  const names = { ...Object.fromEntries(Object.entries(LANGS).map(([k, [n]]) => [k, t(n)])), [SIGNS]: t('Signs & Songs') }
   const section = (key, heading, help) => {
     const list = player.langPrefs(key)
     const rest = [...(key === 'subLangs' ? [SIGNS] : []), ...Object.keys(LANGS)].filter(k => !list.includes(k))
     return `<h3>${heading}</h3><p class="muted">${help}</p>
       <ol class="prio">${list.map((k, i) => `<li><b>${i + 1}</b><span>${esc(names[k] ?? k)}</span>
-        <button data-key="${key}" data-move="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
-        <button data-key="${key}" data-move="${i}" data-dir="1" ${i === list.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
-        <button data-key="${key}" data-del="${i}" aria-label="Remove">✕</button></li>`).join('')}</ol>
-      <label class="prio-add"><select data-add="${key}" aria-label="Add a ${heading.toLowerCase()}"><option value="">+ Add language…</option>${rest.map(k => `<option value="${k}">${esc(names[k])}</option>`).join('')}</select></label>`
+        <button data-key="${key}" data-move="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="${t('Move up')}">↑</button>
+        <button data-key="${key}" data-move="${i}" data-dir="1" ${i === list.length - 1 ? 'disabled' : ''} aria-label="${t('Move down')}">↓</button>
+        <button data-key="${key}" data-del="${i}" aria-label="${t('Remove')}">✕</button></li>`).join('')}</ol>
+      <label class="prio-add"><select data-add="${key}" aria-label="${heading}"><option value="">${t('+ Add language…')}</option>${rest.map(k => `<option value="${k}">${esc(names[k])}</option>`).join('')}</select></label>`
   }
-  $app.innerHTML = `<div class="page settings"><h2>Settings</h2>
-    ${section('audioLangs', 'Audio language', 'For releases with more than one audio track (e.g. dual audio). If none of these are in the file, its default track plays.')}
-    ${section('subLangs', 'Subtitle language', 'The first of these the file has is turned on; Signs & Songs translates only on-screen text and lyrics. If none are in the file, a Signs & Songs track is used if there is one, otherwise subtitles stay off. Leave the list empty to always turn them off.')}
-    <h3>Sort sources by</h3>
-    <p class="muted">Which list puts a source on top in the source picker and Auto Select, when its name says what languages it has. The other list breaks ties.</p>
-    ${[['audio', 'Audio language first'], ['subs', 'Subtitle language first']].map(([v, l]) => `<label class="check"><input type="radio" name="langFirst" value="${v}" ${load('langFirst', 'audio') === v ? 'checked' : ''}> ${l}</label>`).join('')}
-    <h3>Player</h3>
-    ${[['builtin', 'Built-in'], ['mpv', 'mpv: plays every audio and video format, including Dolby and DTS audio']].map(([v, l]) => `<label class="check"><input type="radio" name="player" value="${v}" ${load('player', 'builtin') === v ? 'checked' : ''}> ${l}</label>`).join('')}
-    <label class="check"><input type="checkbox" data-mpv-auto ${load('mpvAuto', true) ? 'checked' : ''}> With the built-in player, use mpv for releases whose audio it can't play (Dolby, DTS)</label>
-    ${hasMpv ? '' : '<p class="err">mpv is missing from this installation, so the built-in player is used.</p>'}
-    <h3>Notifications</h3>
-    <label class="check"><input type="checkbox" data-notify ${load('notify', true) ? 'checked' : ''}> Tell me when a new episode of a show I follow is out (checked every 30 minutes while Kotakbase is open)</label>
+  const saved = load('language', null)
+  $app.innerHTML = `<div class="page settings"><h2>${t('Settings')}</h2>
+    <h3>${t('Language')}</h3>
+    <label class="prio-add"><select data-language aria-label="${t('Language')}"><option value="">${t('System ({language})', { language: LANGUAGES[pickLanguage(null, navigator.languages)] })}</option>${Object.entries(LANGUAGES).map(([code, name]) => `<option value="${code}" ${saved === code ? 'selected' : ''}>${name}</option>`).join('')}</select></label>
+    ${section('audioLangs', t('Audio language'), t('For releases with more than one audio track (e.g. dual audio). If none of these are in the file, its default track plays.'))}
+    ${section('subLangs', t('Subtitle language'), t('The first of these the file has is turned on; Signs & Songs translates only on-screen text and lyrics. If none are in the file, a Signs & Songs track is used if there is one, otherwise subtitles stay off. Leave the list empty to always turn them off.'))}
+    <h3>${t('Sort sources by')}</h3>
+    <p class="muted">${t('Which list puts a source on top in the source picker and Auto Select, when its name says what languages it has. The other list breaks ties.')}</p>
+    ${[['audio', t('Audio language first')], ['subs', t('Subtitle language first')]].map(([v, l]) => `<label class="check"><input type="radio" name="langFirst" value="${v}" ${load('langFirst', 'audio') === v ? 'checked' : ''}> ${l}</label>`).join('')}
+    <h3>${t('Player')}</h3>
+    ${[['builtin', t('Built-in')], ['mpv', t('mpv: plays every audio and video format, including Dolby and DTS audio')]].map(([v, l]) => `<label class="check"><input type="radio" name="player" value="${v}" ${load('player', 'builtin') === v ? 'checked' : ''}> ${l}</label>`).join('')}
+    <label class="check"><input type="checkbox" data-mpv-auto ${load('mpvAuto', true) ? 'checked' : ''}> ${t("With the built-in player, use mpv for releases whose audio it can't play (Dolby, DTS)")}</label>
+    ${hasMpv ? '' : `<p class="err">${t('mpv is missing from this installation, so the built-in player is used.')}</p>`}
+    <h3>${t('Notifications')}</h3>
+    <label class="check"><input type="checkbox" data-notify ${load('notify', true) ? 'checked' : ''}> ${t('Tell me when a new episode of a show I follow is out (checked every 30 minutes while Kotakbase is open)')}</label>
     <h3>Discord</h3>
-    <label class="check"><input type="checkbox" data-discord ${load('discord', true) ? 'checked' : ''}> Show what I'm watching on my Discord profile (needs the Discord desktop app)</label>
-    <h3>Closing the window</h3>
-    <label class="check"><input type="checkbox" data-tray ${load('closeToTray', true) ? 'checked' : ''}> Keep Kotakbase running in the tray when the window is closed (quit from its tray icon). Turn off to quit on close.</label>
+    <label class="check"><input type="checkbox" data-discord ${load('discord', true) ? 'checked' : ''}> ${t("Show what I'm watching on my Discord profile (needs the Discord desktop app)")}</label>
+    <h3>${t('Closing the window')}</h3>
+    <label class="check"><input type="checkbox" data-tray ${load('closeToTray', true) ? 'checked' : ''}> ${t('Keep Kotakbase running in the tray when the window is closed (quit from its tray icon). Turn off to quit on close.')}</label>
     <h3>AniList</h3>
     <div data-anilist></div>
-    <h3>Updates</h3>
+    <h3>${t('Updates')}</h3>
     <div data-updates></div>
-    <h3>Your data</h3>
-    <p class="muted">Back up your progress, list, history, ratings, extensions and settings to a file, or restore them from one.</p>
-    <div class="actions"><button class="btn ghost" data-export>Export backup</button><button class="btn ghost" data-import>Import backup</button><input type="file" accept=".json,application/json" hidden data-import-file></div>
+    <h3>${t('Your data')}</h3>
+    <p class="muted">${t('Back up your progress, list, history, ratings, extensions and settings to a file, or restore them from one.')}</p>
+    <div class="actions"><button class="btn ghost" data-export>${t('Export backup')}</button><button class="btn ghost" data-import>${t('Import backup')}</button><input type="file" accept=".json,application/json" hidden data-import-file></div>
     <div class="err" id="data-err"></div>
   </div>`
   sync.settings($app.querySelector('[data-anilist]'))
@@ -820,6 +834,8 @@ function settingsPage () {
     if (b.dataset.move) update(b.dataset.key, l => { const i = +b.dataset.move; const j = i + +b.dataset.dir; [l[i], l[j]] = [l[j], l[i]] })
   }
   $app.onchange = e => {
+    // the whole app is drawn in the chosen language at start, so switching reloads it
+    if (e.target.matches('[data-language]')) { e.target.value ? save('language', e.target.value) : unstore('language'); return location.reload() }
     if (e.target.matches('[data-notify]')) return save('notify', e.target.checked)
     if (e.target.name === 'langFirst') return save('langFirst', e.target.value)
     if (e.target.name === 'player') return save('player', e.target.value)
@@ -846,12 +862,12 @@ function exportData () {
 // A backup file replaces what's here (after asking); anything that isn't a Kotakbase backup is refused untouched
 async function importData (file) {
   if (!file) return
-  const notBackup = new Error('That file isn\'t a Kotakbase backup.')
+  const notBackup = new Error(t("That file isn't a Kotakbase backup."))
   let backup
   try { backup = JSON.parse(await file.text()) } catch { throw notBackup }
   const data = backup?.kotakbase === 1 && backup.data
   if (!data || typeof data !== 'object' || !Object.values(data).every(v => typeof v === 'string')) throw notBackup
-  if (!await ask('Import backup?', `<p>Your progress, list, history, ratings, extensions and settings will be replaced with the backup from ${esc(new Date(backup.exported).toLocaleString())}.</p>`, 'Replace')) return
+  if (!await ask(t('Import backup?'), `<p>${t('Your progress, list, history, ratings, extensions and settings will be replaced with the backup from {date}.', { date: esc(new Date(backup.exported).toLocaleString(language())) })}</p>`, t('Replace'))) return
   backupKeys().forEach(k => localStorage.removeItem(k))
   stored.clear()
   for (const [k, v] of Object.entries(data)) localStorage.setItem(k, v)
@@ -911,7 +927,7 @@ const ICON = {
   folder: '<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z" class="fill"/></svg>',
   best: '<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>'
 }
-const RESOLUTIONS = [['2160', '2160p'], ['1080', '1080p'], ['720', '720p'], ['540', '540p'], ['480', '480p'], ['', 'Any']]
+const RESOLUTIONS = [['2160', '2160p'], ['1080', '1080p'], ['720', '720p'], ['540', '540p'], ['480', '480p'], ['', t('Any')]]
 const MANUAL = /^(magnet:\?|[0-9a-f]{40}$|https?:\/\/\S+\.torrent(\?|$))/i
 const seedClass = n => n >= 25 ? 'good' : n >= 5 ? 'ok' : 'bad'
 
@@ -920,7 +936,7 @@ const seedClass = n => n >= 25 ? 'good' : n >= 5 ? 'ok' : 'bad'
 const resultLanguages = r => audioLanguages([...(r.titles ?? [r.title])], [...r.extensions].some(id => ext.configs[id]?.media === 'dub'))
 // a release that names no subtitle language is taken as English-subbed, the norm for the sources Kotakbase searches
 const resultSubs = r => { const s = subLanguages([...(r.titles ?? [r.title])]); return s.size ? s : new Set(['eng']) }
-const multiSubs = r => releaseTags([...(r.titles ?? [r.title])]).some(t => t.label === 'Multi Subs')
+const multiSubs = r => releaseTags([...(r.titles ?? [r.title])]).some(tag => tag.label === 'Multi Subs')
 const byLanguage = results => rankByLanguage(results, { audio: player.langPrefs('audioLangs'), subs: player.langPrefs('subLangs'), first: load('langFirst', 'audio') }, resultLanguages, resultSubs, multiSubs)
 const autoPick = results => pickAuto(results)
 
@@ -933,7 +949,7 @@ const usesMpv = r => hasMpv && (load('player', 'builtin') === 'mpv' || (autoMpv(
 const silent = r => !usesMpv(r) && unplayableAudio([...(r.titles ?? [r.title])])
 
 // take the group from whichever extension's copy of the name it can be read from
-const groupOf = r => [...(r.titles ?? [r.title ?? ''])].map(t => parseRelease(t).group).find(Boolean)
+const groupOf = r => [...(r.titles ?? [r.title ?? ''])].map(name => parseRelease(name).group).find(Boolean)
 // The release group picked for a show, so its next episode offers that group first
 function rememberSource (m, r) {
   const group = groupOf(r)
@@ -944,8 +960,8 @@ function rememberSource (m, r) {
 const SHORT = { jpn: 'JP', chi: 'CN', kor: 'KR' } // country-style where it's the familiar form; else the 2-letter code
 const short = k => SHORT[k] ?? LANGS[k]?.[1]?.toUpperCase() ?? k
 // audio: filled tags; subtitles: outlined, only when the name states them ("Multi Subs" already has its own tag)
-const langTags = (r, multiSubs) => [...resultLanguages(r)].map(k => `<i class="lang" title="Audio: ${esc(LANGS[k]?.[0] ?? k)}">${esc(short(k))}</i>`).join('') +
-  (multiSubs ? '' : [...subLanguages([...(r.titles ?? [r.title])])].map(k => `<i class="sub" title="Subtitles: ${esc(LANGS[k]?.[0] ?? k)}">${esc(short(k))}</i>`).join(''))
+const langTags = (r, multiSubs) => [...resultLanguages(r)].map(k => `<i class="lang" title="${t('Audio: {language}', { language: esc(t(LANGS[k]?.[0] ?? k)) })}">${esc(short(k))}</i>`).join('') +
+  (multiSubs ? '' : [...subLanguages([...(r.titles ?? [r.title])])].map(k => `<i class="sub" title="${t('Subtitles: {language}', { language: esc(t(LANGS[k]?.[0] ?? k)) })}">${esc(short(k))}</i>`).join(''))
 
 function sourceCard (r, k, lastUsed) {
   const tags = releaseTags([...(r.titles ?? [r.title])])
@@ -953,16 +969,16 @@ function sourceCard (r, k, lastUsed) {
   const batch = r.type === 'batch'
   const exts = [...r.extensions].map(id => ext.configs[id]).filter(Boolean)
   return `<button class="rel" data-k="${k}">
-    <span class="rel-check ${r.accuracy}" title="${esc(r.accuracy)} accuracy">${ICON.check}</span>
+    <span class="rel-check ${r.accuracy}" title="${t('{level} accuracy', { level: esc(t(r.accuracy)) })}">${ICON.check}</span>
     <span class="rel-icon ${batch ? 'folder' : r.type === 'best' ? 'best' : ''}">${batch ? ICON.folder : r.type === 'best' ? ICON.best : ICON.file}</span>
     <span class="rel-main">
-      <b>${esc(group || r.title)}${lastUsed ? '<span class="badge">Last used</span>' : ''}</b>
+      <b>${esc(group || r.title)}${lastUsed ? `<span class="badge">${t('Last used')}</span>` : ''}</b>
       <span class="rel-name">${esc(r.title)}</span>
-      <span class="rel-meta">${batch ? '<i class="rel-batch">Batch</i> · ' : ''}<em class="${seedClass(r.seeders)}">${r.seeders} Seeders</em> · ${size(r.size)}${r.date.getTime() ? ` · ${esc(ago(r.date))}` : ''}</span>
+      <span class="rel-meta">${batch ? `<i class="rel-batch">${t('Batch')}</i> · ` : ''}<em class="${seedClass(r.seeders)}">${t('{n} seeders', { n: r.seeders })}</em> · ${size(r.size)}${r.date.getTime() ? ` · ${esc(ago(r.date))}` : ''}</span>
     </span>
     <span class="rel-side">
       <span class="rel-exts">${exts.map(c => `<img src="${esc(c.icon)}" alt="${esc(c.name)}" title="${esc(c.name)}">`).join('')}</span>
-      <span class="rel-tags">${silent(r) ? '<i class="noaudio" title="Its audio is Dolby (DDP, AC3, TrueHD) or DTS, which Kotakbase cannot play: the video would be silent">No audio</i>' : ''}${tags.map(t => `<i class="${t.kind}">${esc(t.label)}</i>`).join('')}${langTags(r, tags.some(t => t.label === 'Multi Subs'))}</span>
+      <span class="rel-tags">${silent(r) ? `<i class="noaudio" title="${t('Its audio is Dolby (DDP, AC3, TrueHD) or DTS, which Kotakbase cannot play: the video would be silent')}">${t('No audio')}</i>` : ''}${tags.map(tag => `<i class="${tag.kind}">${esc(tag.label)}</i>`).join('')}${langTags(r, tags.some(tag => tag.label === 'Multi Subs'))}</span>
     </span>
   </button>`
 }
@@ -983,18 +999,18 @@ function sources (m, startEpisode, opts = {}) {
   document.querySelector('.src-modal')?.remove() // only one source picker at a time
   const modal = document.createElement('div')
   modal.className = 'modal src-modal'
-  modal.innerHTML = `<div class="src-box" role="dialog" aria-label="Select a source">
+  modal.innerHTML = `<div class="src-box" role="dialog" aria-label="${t('Select a source')}">
     <div class="src-head" style="background-image:url('${esc(m.bannerImage ?? m.coverImage.extraLarge)}')">
-      <h2>${opts.download ? 'Download: ' : ''}${esc(title(m))}</h2>
-      <button class="src-close" data-close aria-label="Close">✕</button>
-      ${opts.download === 'season' ? '<p class="src-hint">Pick a batch (the folder icon) to download every episode out so far, or a single release for just this episode.</p>' : opts.download ? '<p class="src-hint">Pick a source to download this episode.</p>' : ''}
+      <h2>${opts.download ? t('Download: {title}', { title: esc(title(m)) }) : esc(title(m))}</h2>
+      <button class="src-close" data-close aria-label="${t('Close')}">✕</button>
+      ${opts.download === 'season' ? `<p class="src-hint">${t('Pick a batch (the folder icon) to download every episode out so far, or a single release for just this episode.')}</p>` : opts.download ? `<p class="src-hint">${t('Pick a source to download this episode.')}</p>` : ''}
       <label class="src-filter"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-        <input placeholder="Filter by text, or paste a magnet link or torrent URL here to specify a torrent manually" aria-label="Filter or paste a magnet link"></label>
+        <input placeholder="${t('Filter by text, or paste a magnet link or torrent URL here to specify a torrent manually')}" aria-label="${t('Filter or paste a magnet link')}"></label>
       <div class="src-opts">
-        <label>Episode <input type="number" min="1" max="${total}" value="${episode}" class="src-ep"></label>
-        <label>Resolution <select class="src-res">${RESOLUTIONS.map(([v, l]) => `<option value="${v}" ${load('resolution', '1080') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>${t('Episode')} <input type="number" min="1" max="${total}" value="${episode}" class="src-ep"></label>
+        <label>${t('Resolution')} <select class="src-res">${RESOLUTIONS.map(([v, l]) => `<option value="${v}" ${load('resolution', '1080') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
-      <button class="src-auto" disabled><span class="src-auto-label">Searching…</span></button>
+      <button class="src-auto" disabled><span class="src-auto-label">${t('Searching…')}</span></button>
     </div>
     <div class="err"></div>
     <div class="src-list"></div>
@@ -1011,12 +1027,12 @@ function sources (m, startEpisode, opts = {}) {
     const q = filter.value.trim()
     if (MANUAL.test(q)) {
       $('.src-list').innerHTML = `<button class="rel" data-manual><span class="rel-check high">${ICON.check}</span><span class="rel-icon">${ICON.file}</span>
-        <span class="rel-main"><b>Play this torrent</b><span class="rel-name">${esc(q)}</span><span class="rel-meta">Press Enter or click to stream it as episode ${episode}</span></span></button>`
+        <span class="rel-main"><b>${t('Play this torrent')}</b><span class="rel-name">${esc(q)}</span><span class="rel-meta">${t('Press Enter or click to stream it as episode {n}', { n: episode })}</span></span></button>`
       return
     }
     const words = q.toLowerCase().split(/\s+/).filter(Boolean)
     const shown = results.map((r, k) => [r, k]).filter(([r]) => words.every(w => r.title.toLowerCase().includes(w)))
-    $('.src-list').innerHTML = shown.length ? shown.map(([r, k]) => sourceCard(r, k, lastGroup && groupOf(r) === lastGroup)).join('') : `<p class="muted src-empty">${results.length ? 'No sources match the filter.' : searching ? 'Searching extensions…' : dead ? `No sources with seeders found (${dead} with none hidden). Try another resolution or episode.` : Object.keys(ext.configs).length ? 'No sources found.' : 'No extensions installed. Add one under <a href="#/extensions">Extensions</a> to find sources.'}</p>`
+    $('.src-list').innerHTML = shown.length ? shown.map(([r, k]) => sourceCard(r, k, lastGroup && groupOf(r) === lastGroup)).join('') : `<p class="muted src-empty">${results.length ? t('No sources match the filter.') : searching ? t('Searching extensions…') : dead ? t('No sources with seeders found ({n} with none hidden). Try another resolution or episode.', { n: dead }) : Object.keys(ext.configs).length ? t('No sources found.') : t('No extensions installed. Add one under <a href="#/extensions">Extensions</a> to find sources.')}</p>`
   }
 
   async function search () {
@@ -1024,8 +1040,8 @@ function sources (m, startEpisode, opts = {}) {
     results = []
     searching = true
     autoBtn.disabled = true
-    $('.src-auto-label').textContent = 'Searching…'
-    $('.src-list').innerHTML = '<p class="muted src-empty">Searching extensions…</p>'
+    $('.src-auto-label').textContent = t('Searching…')
+    $('.src-list').innerHTML = `<p class="muted src-empty">${t('Searching extensions…')}</p>`
     $('.err').textContent = ''
     try {
       const ids = await mappings(m.id, episode)
@@ -1064,14 +1080,14 @@ function sources (m, startEpisode, opts = {}) {
       show()
       // brand-new shows often aren't mapped yet, and most extensions search by AniDB/TVDB ids, so say why instead of only showing their errors
       const unmapped = !results.length && !ids.anidbAid && !ids.tvdbId && !ids.tmdbId
-      $('.err').textContent = (unmapped ? 'This show isn\'t linked to AniDB/TVDB yet (common for brand-new releases), so most extensions can\'t search for it. Try again in a few days, or paste a magnet link above. Details: ' : '') + res.errors.join(' · ')
+      $('.err').textContent = (unmapped ? t("This show isn't linked to AniDB/TVDB yet (common for brand-new releases), so most extensions can't search for it. Try again in a few days, or paste a magnet link above. Details:") + ' ' : '') + res.errors.join(' · ')
       autoBtn.disabled = !results.length
-      $('.src-auto-label').textContent = results.length ? 'Auto Select Torrent' : 'No sources'
+      $('.src-auto-label').textContent = results.length ? t('Auto Select Torrent') : t('No sources')
     } catch (e) {
       if (id !== searchId) return
       searching = false
       $('.src-list').innerHTML = `<p class="err src-empty">${esc(e.message)}</p>`
-      $('.src-auto-label').textContent = 'No sources'
+      $('.src-auto-label').textContent = t('No sources')
     }
   }
 
@@ -1088,13 +1104,13 @@ function sources (m, startEpisode, opts = {}) {
     if (k != null) choose(results[k])
   }
   filter.oninput = render
-  let t
+  let timer
   $('.src-ep').oninput = e => {
     const n = Number(e.target.value)
     if (!Number.isInteger(n) || n < 1 || n > total) return
     episode = n
-    clearTimeout(t)
-    t = setTimeout(search, 400)
+    clearTimeout(timer)
+    timer = setTimeout(search, 400)
   }
   $('.src-res').onchange = e => { save('resolution', e.target.value); search() }
   filter.focus()
@@ -1107,7 +1123,7 @@ async function aniSkip (malId, episode, duration) {
   if (!malId) return []
   const res = await fetch(`https://api.aniskip.com/v2/skip-times/${malId}/${episode}?types=op&types=ed&episodeLength=${Math.round(duration)}`)
   const { results = [] } = await res.json()
-  return results.map(r => ({ title: r.skipType === 'op' ? 'Opening' : 'Ending', start: r.interval.startTime, end: r.interval.endTime, kind: r.skipType })).sort((a, b) => a.start - b.start)
+  return results.map(r => ({ title: r.skipType === 'op' ? t('Opening') : t('Ending'), start: r.interval.startTime, end: r.interval.endTime, kind: r.skipType })).sort((a, b) => a.start - b.start)
 }
 
 // Episode list that slides in over the player (from its "Episode N / M" line); picking one opens its sources.
@@ -1115,9 +1131,9 @@ async function episodeDrawer (m, playing) {
   document.querySelector('.ep-drawer')?.remove()
   const drawer = document.createElement('div')
   drawer.className = 'ep-drawer'
-  drawer.innerHTML = `<div class="ep-drawer-box" role="dialog" aria-label="Episodes">
-    <div class="ep-drawer-head"><b>${esc(title(m))}</b><button class="src-close" data-close aria-label="Close">✕</button></div>
-    <div class="ep-drawer-list"><p class="muted src-empty">Loading episodes…</p></div>
+  drawer.innerHTML = `<div class="ep-drawer-box" role="dialog" aria-label="${t('Episodes')}">
+    <div class="ep-drawer-head"><b>${esc(title(m))}</b><button class="src-close" data-close aria-label="${t('Close')}">✕</button></div>
+    <div class="ep-drawer-list"><p class="muted src-empty">${t('Loading episodes…')}</p></div>
   </div>`
   document.body.append(drawer)
   const onKey = e => { if (e.key === 'Escape') { e.stopImmediatePropagation(); close() } }
@@ -1145,15 +1161,15 @@ function chooseFile (m, link) {
   return new Promise(resolve => {
     const modal = document.createElement('div')
     modal.className = 'modal'
-    modal.innerHTML = `<div class="src-box" role="dialog" aria-label="Choose a file">
+    modal.innerHTML = `<div class="src-box" role="dialog" aria-label="${t('Choose a file')}">
       <div class="src-head" style="background-image:url('${esc(m.bannerImage ?? m.coverImage.extraLarge)}')">
         <h2>${esc(title(m))}</h2>
-        <button class="src-close" data-close aria-label="Close">✕</button>
-        <p class="muted src-hint">This torrent has several videos. Pick the one to play.</p>
+        <button class="src-close" data-close aria-label="${t('Close')}">✕</button>
+        <p class="muted src-hint">${t('This torrent has several videos. Pick the one to play.')}</p>
         <label class="src-filter"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-          <input placeholder="Filter files, e.g. OVA, OAD, special" aria-label="Filter files"></label>
+          <input placeholder="${t('Filter files, e.g. OVA, OAD, special')}" aria-label="${t('Filter files')}"></label>
       </div>
-      <div class="src-list"><p class="muted src-empty">Loading the file list…</p></div>
+      <div class="src-list"><p class="muted src-empty">${t('Loading the file list…')}</p></div>
     </div>`
     document.body.append(modal)
     const $ = sel => modal.querySelector(sel)
@@ -1169,7 +1185,7 @@ function chooseFile (m, link) {
           return `<button class="rel" data-i="${f.index}"><span></span><span class="rel-icon">${ICON.file}</span>
             <span class="rel-main"><b>${esc(f.name)}</b><span class="rel-name">${esc(folder)}</span><span class="rel-meta">${size(f.size)}</span></span></button>`
         }).join('')
-        : '<p class="muted src-empty">No files match the filter.</p>'
+        : `<p class="muted src-empty">${t('No files match the filter.')}</p>`
     }
     modal.onclick = e => {
       if (e.target === modal || e.target.closest('[data-close]')) return cancel()
@@ -1184,7 +1200,7 @@ function chooseFile (m, link) {
       if (list.length <= 1) return done(undefined)
       files = list.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }))
       render()
-    }, e => { $('.src-list').innerHTML = `<p class="err src-empty">Couldn't load the torrent: ${esc(e.message)}</p>` })
+    }, e => { $('.src-list').innerHTML = `<p class="err src-empty">${t("Couldn't load the torrent: {error}", { error: esc(e.message) })}</p>` })
   })
 }
 
@@ -1222,7 +1238,7 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
   const findNext = download => nextIds?.then(nb => window.native.nextFile(result.link, episode + 1, nb, download).then(index => { next = index == null ? null : { index, numbering: nb } })).catch(() => {})
   player.play({
     title: title(m),
-    subtitle: `Episode ${episode} / ${total}`,
+    subtitle: t('Episode {n} / {total}', { n: episode, total }),
     link: result.link,
     episode,
     fileIndex,
@@ -1283,7 +1299,7 @@ function episodeDownload (mediaId, episode) {
 }
 const dlButton = (m, n) => {
   const s = episodeDownload(m.id, n)
-  return `<span class="ep-dl ${s === 'done' ? 'done' : s ? 'busy' : ''}" data-dl-ep="${n}" data-media="${m.id}" role="button" title="${s === 'done' ? 'Downloaded' : s ? `Downloading: ${s}` : 'Download this episode'}">${s === 'done' ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' : s ? `<small>${s}</small>` : DL_ICON}</span>`
+  return `<span class="ep-dl ${s === 'done' ? 'done' : s ? 'busy' : ''}" data-dl-ep="${n}" data-media="${m.id}" role="button" title="${s === 'done' ? t('Downloaded') : s ? t('Downloading: {percent}', { percent: s }) : t('Download this episode')}">${s === 'done' ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>' : s ? `<small>${s}</small>` : DL_ICON}</span>`
 }
 
 const totals = list => {
@@ -1294,11 +1310,11 @@ const totals = list => {
 }
 function onDownloads (list) {
   downloadList = list
-  const t = totals(list)
+  const sum = totals(list)
   const pill = document.getElementById('dl-pill')
-  pill.textContent = t.active ? `${t.pct}%` : t.done ? String(t.done) : ''
-  pill.parentElement.classList.toggle('busy', !!t.active)
-  pill.parentElement.title = t.active ? `Downloading: ${t.pct}%` : t.done ? `${t.done} episodes downloaded` : 'Downloads'
+  pill.textContent = sum.active ? `${sum.pct}%` : sum.done ? String(sum.done) : ''
+  pill.parentElement.classList.toggle('busy', !!sum.active)
+  pill.parentElement.title = sum.active ? t('Downloading: {percent}', { percent: `${sum.pct}%` }) : sum.done ? t('{n} episodes downloaded', { n: sum.done }) : t('Downloads')
   // episode cards on a show page: their download buttons follow along
   for (const el of document.querySelectorAll('[data-dl-ep]')) {
     const fresh = document.createRange().createContextualFragment(dlButton({ id: +el.dataset.media }, +el.dataset.dlEp)).firstChild
@@ -1322,9 +1338,9 @@ async function startDownload (m, episode, r, mode) {
   try {
     const res = await window.native.downloads.add({ mediaId: m.id, title: title(m), cover: m.coverImage.extraLarge, link: r.link, episodes, fileIndex })
     rememberSource(m, r)
-    notice(res.waiting ? 'That torrent is playing right now, so its download starts when you close the player.' : `Downloading ${res.episodes === 1 ? '1 episode' : `${res.episodes} episodes`}. See them under Downloads.`)
+    notice(res.waiting ? t('That torrent is playing right now, so its download starts when you close the player.') : t('Downloading {episodes}. See them under Downloads.', { episodes: t('{n} episodes', { n: res.episodes }) }))
   } catch (e) {
-    notice(`Couldn't download: ${e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, '')}`)
+    notice(t("Couldn't download: {error}", { error: t(e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, '')) }))
   }
 }
 
@@ -1350,17 +1366,17 @@ function downloadsPage (update = false) {
       for (const f of d.files) {
         const bar = $app.querySelector(`[data-dl-bar="${d.id}:${f.index}"]`)
         if (bar) bar.style.width = `${Math.min(100, f.have / f.length * 100)}%`
-        const t = $app.querySelector(`[data-dl-size="${d.id}:${f.index}"]`)
-        if (t) t.textContent = fileText(f)
+        const sz = $app.querySelector(`[data-dl-size="${d.id}:${f.index}"]`)
+        if (sz) sz.textContent = fileText(f)
       }
     }
     return
   }
   downloadsShape = shape
   const shows = [...new Set(list.map(d => d.mediaId))]
-  $app.innerHTML = `<div class="page downloads"><h2>Downloads</h2>
-    <p class="muted">Episodes you download play from your computer, without internet. <span class="dl-dir"></span></p>
-    <div class="actions"><button class="btn ghost" data-dl-open>Open folder</button><button class="btn ghost" data-dl-dir>Change folder</button></div>
+  $app.innerHTML = `<div class="page downloads"><h2>${t('Downloads')}</h2>
+    <p class="muted">${t('Episodes you download play from your computer, without internet.')} <span class="dl-dir"></span></p>
+    <div class="actions"><button class="btn ghost" data-dl-open>${t('Open folder')}</button><button class="btn ghost" data-dl-dir>${t('Change folder')}</button></div>
     ${shows.length ? shows.map(id => {
       const items = list.filter(d => d.mediaId === id)
       return `<section class="box dl-show">
@@ -1369,26 +1385,26 @@ function downloadsPage (update = false) {
           <h3><a href="#/anime/${id}">${esc(items[0].title)}</a></h3>
           ${items.map(d => `<div class="dl-torrent">
             <div class="dl-head"><span class="muted" data-dl-stat="${d.id}">${esc(statusText(d))}</span>
-              ${d.status === 'active' ? `<button class="btn ghost" data-dl-pause="${d.id}">Pause</button>` : ['paused', 'error'].includes(d.status) ? `<button class="btn ghost" data-dl-resume="${d.id}">Resume</button>` : ''}
-              <button class="btn ghost" data-dl-del="${d.id}">Delete</button></div>
+              ${d.status === 'active' ? `<button class="btn ghost" data-dl-pause="${d.id}">${t('Pause')}</button>` : ['paused', 'error'].includes(d.status) ? `<button class="btn ghost" data-dl-resume="${d.id}">${t('Resume')}</button>` : ''}
+              <button class="btn ghost" data-dl-del="${d.id}">${t('Delete')}</button></div>
             ${d.files.map(f => `<div class="dl-file">
-              <button class="dl-play" data-dl-play="${d.id}:${f.index}" ${f.done && !f.missing ? '' : 'disabled'} aria-label="Play episode ${f.episode ?? ''}"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg></button>
-              <div class="dl-info"><b>${f.episode ? `Episode ${f.episode}` : esc(f.name)}</b><span class="muted" title="${esc(f.name)}">${esc(f.name)}</span>
+              <button class="dl-play" data-dl-play="${d.id}:${f.index}" ${f.done && !f.missing ? '' : 'disabled'} aria-label="${t('Play episode {n}', { n: f.episode ?? '' })}"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg></button>
+              <div class="dl-info"><b>${f.episode ? t('Episode {n}', { n: f.episode }) : esc(f.name)}</b><span class="muted" title="${esc(f.name)}">${esc(f.name)}</span>
                 <div class="meter"><i data-dl-bar="${d.id}:${f.index}" style="width:${Math.min(100, f.have / f.length * 100)}%"></i></div></div>
               <span class="muted dl-size" data-dl-size="${d.id}:${f.index}">${esc(fileText(f))}</span>
-              <button class="dl-x" data-dl-del="${d.id}:${f.index}" aria-label="Delete this episode" title="Delete this episode">✕</button>
+              <button class="dl-x" data-dl-del="${d.id}:${f.index}" aria-label="${t('Delete this episode')}" title="${t('Delete this episode')}">✕</button>
             </div>`).join('')}
           </div>`).join('')}
         </div></section>`
-    }).join('') : '<p class="muted">Nothing downloaded yet. On a show\'s page, use the download button next to Watch for a whole season, or the one on an episode for just that episode.</p>'}
+    }).join('') : `<p class="muted">${t("Nothing downloaded yet. On a show's page, use the download button next to Watch for a whole season, or the one on an episode for just that episode.")}</p>`}
   </div>`
-  window.native.downloads.dir().then(d => { const el = $app.querySelector('.dl-dir'); if (el) el.textContent = `Saved in ${d}.` })
+  window.native.downloads.dir().then(d => { const el = $app.querySelector('.dl-dir'); if (el) el.textContent = t('Saved in {folder}.', { folder: d }) })
   $app.onclick = async e => {
     const b = e.target.closest('button')
     if (!b) return
     const d = b.dataset
     if (d.dlOpen != null) return window.native.downloads.open()
-    if (d.dlDir != null) return window.native.downloads.chooseDir().then(dir => { $app.querySelector('.dl-dir').textContent = `New downloads go to ${dir}.` })
+    if (d.dlDir != null) return window.native.downloads.chooseDir().then(dir => { $app.querySelector('.dl-dir').textContent = t('New downloads go to {folder}.', { folder: dir }) })
     if (d.dlPause) return window.native.downloads.pause(d.dlPause)
     if (d.dlResume) return window.native.downloads.resume(d.dlResume)
     if (d.dlPlay) {
@@ -1397,32 +1413,33 @@ function downloadsPage (update = false) {
       const f = item?.files.find(x => x.index === +index)
       if (!f) return
       const m = await media(item.mediaId).catch(() => null)
-      if (!m) return notice('Couldn\'t load this show\'s details, which the player needs. Try again when you\'re online.')
+      if (!m) return notice(t("Couldn't load this show's details, which the player needs. Try again when you're online."))
       return play(m, f.episode ?? 1, { link: item.magnet, title: f.name, local: { id, index: +index } }, {}, +index)
     }
     if (d.dlDel) {
       const [id, index] = d.dlDel.split(':')
       const item = downloadList.find(x => x.id === id)
       const f = index != null && item?.files.find(x => x.index === +index)
-      const what = f ? (f.episode ? `episode ${f.episode}` : f.name) : `${item.files.length === 1 ? 'this episode' : `these ${item.files.length} episodes`} of ${item.title}`
-      if (await ask('Delete download?', `<p>The video file${f || item.files.length === 1 ? '' : 's'} for ${esc(what)} will be deleted from your computer.</p>`, 'Delete')) window.native.downloads.remove(id, index == null ? undefined : +index)
+      const body = f ? t('The video file for {what} will be deleted from your computer.', { what: esc(f.episode ? t('episode {n}', { n: f.episode }) : f.name) })
+        : t('The video files of {title} ({episodes}) will be deleted from your computer.', { title: esc(item.title), episodes: t('{n} episodes', { n: item.files.length }) })
+      if (await ask(t('Delete download?'), `<p>${body}</p>`, t('Delete'))) window.native.downloads.remove(id, index == null ? undefined : +index)
     }
   }
 }
 function statusText (d) {
   const left = d.files.filter(f => !f.done).length
-  if (d.status === 'waiting') return 'Starts when you close the player'
-  if (d.status === 'paused') return `Paused · ${left} to go`
-  if (d.status === 'error') return `Stopped: ${d.error}`
-  if (d.status === 'done') return d.files.some(f => f.missing) ? 'Some files were deleted outside Kotakbase' : 'Downloaded'
-  return `Downloading · ${(d.speed / 1e6).toFixed(1)} MB/s · ${d.peers} peers · ${left} to go`
+  if (d.status === 'waiting') return t('Starts when you close the player')
+  if (d.status === 'paused') return `${t('Paused')} · ${t('{n} to go', { n: left })}`
+  if (d.status === 'error') return t('Stopped: {error}', { error: d.error })
+  if (d.status === 'done') return d.files.some(f => f.missing) ? t('Some files were deleted outside Kotakbase') : t('Downloaded')
+  return `${t('Downloading')} · ${(d.speed / 1e6).toFixed(1)} MB/s · ${t('{n} peers', { n: d.peers })} · ${t('{n} to go', { n: left })}`
 }
-const fileText = f => f.missing ? 'File missing' : f.done ? size(f.length) : `${size(Math.min(f.have, f.length))} of ${size(f.length)}`
+const fileText = f => f.missing ? t('File missing') : f.done ? size(f.length) : t('{have} of {total}', { have: size(Math.min(f.have, f.length)), total: size(f.length) })
 
 // ---- Watch Together ----
 let room = null // the room you're in, if any
 let roomError = ''
-const roomName = () => load('roomName', '') || `Guest ${Math.floor(100 + Math.random() * 900)}`
+const roomName = () => load('roomName', '') || `${t('Guest')} ${Math.floor(100 + Math.random() * 900)}`
 
 async function enterRoom (code) {
   if (room) return
@@ -1441,7 +1458,7 @@ async function enterRoom (code) {
     })
     if (!code) room.claim()
   } catch (e) {
-    roomError = `Couldn't start Watch Together: ${e.message}`
+    roomError = t("Couldn't start Watch Together: {error}", { error: e.message })
   }
   drawRoom()
 }
@@ -1450,7 +1467,7 @@ async function enterRoom (code) {
 function followHost (l) {
   document.querySelector('.src-modal')?.remove()
   media(l.mediaId).then(m => play(m, l.episode, { link: l.link, title: l.title }, l.numbering ?? {}, l.fileIndex, true))
-    .catch(e => { roomError = `Couldn't open what the host is playing: ${e.message}`; drawRoom() })
+    .catch(e => { roomError = t("Couldn't open what the host is playing: {error}", { error: e.message }); drawRoom() })
 }
 
 function leaveRoom () {
@@ -1460,7 +1477,7 @@ function leaveRoom () {
 }
 
 async function notHost () {
-  if (await ask('The host picks what to watch', '<p>You\'re in a Watch Together room, so the host chooses the show, episode and source for everyone. Leave the room to watch something on your own.</p>', 'Leave room', 'Stay')) leaveRoom()
+  if (await ask(t('The host picks what to watch'), `<p>${t("You're in a Watch Together room, so the host chooses the show, episode and source for everyone. Leave the room to watch something on your own.")}</p>`, t('Leave room'), t('Stay'))) leaveRoom()
 }
 
 // An invite link opened Kotakbase (or reached it while running): join that room, asking first if you're in another
@@ -1469,7 +1486,7 @@ async function joinInvite (text) {
   if (!code) return
   if (location.hash !== '#/together') location.hash = '#/together'
   if (room?.code === code) return
-  if (room && !await ask('Join another room?', `<p>You're in room ${esc(formatCode(room.code))}. Leave it and join ${esc(formatCode(code))}?</p>`, 'Join', 'Stay')) return
+  if (room && !await ask(t('Join another room?'), `<p>${t("You're in room {current}. Leave it and join {next}?", { current: esc(formatCode(room.code)), next: esc(formatCode(code)) })}</p>`, t('Join'), t('Stay'))) return
   leaveRoom()
   enterRoom(code)
 }
@@ -1480,59 +1497,59 @@ window.native.on('invite', () => window.native.takeInvite().then(joinInvite))
 function drawRoom () {
   const tab = document.querySelector('[data-nav="together"]')
   if (tab) tab.dataset.count = room ? room.members().length + 1 : ''
-  const hostName = room && (room.isHost() ? 'you\'re the host' : `host: ${room.members().find(p => p.id === room.host)?.name ?? '…'}`)
-  player.room(room && `${room.members().length + 1} watching · ${hostName}`, text => room?.say(text))
+  const hostName = room && (room.isHost() ? t("you're the host") : t('host: {name}', { name: room.members().find(p => p.id === room.host)?.name ?? '…' }))
+  player.room(room && `${t('{n} watching', { n: room.members().length + 1 })} · ${hostName}`, text => room?.say(text))
   if (location.hash === '#/together') togetherPage()
 }
 
 const roomNow = {} // mediaId -> title, for "Now watching"
-const clock = at => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+const clock = at => new Date(at).toLocaleTimeString(language(), { hour: 'numeric', minute: '2-digit' })
 function togetherPage () {
   // redrawn whenever someone joins, leaves or writes: keep what's being typed, and the chat scrolled to the end
   const focused = document.activeElement?.matches?.('.together input') ? document.activeElement.dataset.field : null
   const typed = Object.fromEntries([...$app.querySelectorAll('.together input[data-field]')].map(i => [i.dataset.field, i.value]))
-  const nameField = `<label class="field"><span>Your name</span><input data-field="name" maxlength="40" value="${esc(room?.me.name ?? roomName())}"></label>`
+  const nameField = `<label class="field"><span>${t('Your name')}</span><input data-field="name" maxlength="40" value="${esc(room?.me.name ?? roomName())}"></label>`
   if (!room) {
-    $app.innerHTML = `<div class="page together"><h2>Watch Together</h2>
-      <p class="muted lead">Watch with friends on other devices. The host picks the show, episode and source, and everyone's player follows: pausing, playing and seeking happen for everyone.</p>
+    $app.innerHTML = `<div class="page together"><h2>${t('Watch Together')}</h2>
+      <p class="muted lead">${t("Watch with friends on other devices. The host picks the show, episode and source, and everyone's player follows: pausing, playing and seeking happen for everyone.")}</p>
       ${nameField}
       <div class="together-boxes">
-        <section class="box"><h3>Start a room</h3><p class="muted">You'll be the host. Share the invite link or the room code with your friends.</p><button class="btn" data-create>Create room</button></section>
-        <section class="box"><h3>Join a room</h3><p class="muted">Open the invite link someone shared, or enter their room code.</p>
-          <form class="add" data-join><input data-field="code" placeholder="XXXX-XXXX-XXXX" aria-label="Room code" maxlength="40" autocomplete="off" spellcheck="false"><button class="btn">Join</button></form></section>
+        <section class="box"><h3>${t('Start a room')}</h3><p class="muted">${t("You'll be the host. Share the invite link or the room code with your friends.")}</p><button class="btn" data-create>${t('Create room')}</button></section>
+        <section class="box"><h3>${t('Join a room')}</h3><p class="muted">${t('Open the invite link someone shared, or enter their room code.')}</p>
+          <form class="add" data-join><input data-field="code" placeholder="XXXX-XXXX-XXXX" aria-label="${t('Room code')}" maxlength="40" autocomplete="off" spellcheck="false"><button class="btn">${t('Join')}</button></form></section>
       </div>
       <p class="err">${esc(roomError)}</p></div>`
   } else {
     const people = [room.me, ...room.members()]
-    const status = p => p === room.me ? '' : !p.known ? 'Connecting…' : p.buffering ? 'Loading…' : ''
+    const status = p => p === room.me ? '' : !p.known ? t('Connecting…') : p.buffering ? t('Loading…') : ''
     const l = room.load
     if (l && !(l.mediaId in roomNow)) { roomNow[l.mediaId] = ''; media(l.mediaId).then(m => { roomNow[l.mediaId] = title(m); drawRoom() }, () => {}) }
     const n = room.members().length
     const chat = room.chat()
-    $app.innerHTML = `<div class="page together"><h2>Watch Together</h2>
+    $app.innerHTML = `<div class="page together"><h2>${t('Watch Together')}</h2>
       <section class="box room-head">
-        <div><span class="kicker">Room code</span><b class="room-code">${esc(formatCode(room.code))}</b></div>
-        <div class="actions"><button class="btn" data-copy="link">Copy invite link</button><button class="btn ghost" data-copy="code">Copy code</button><button class="btn ghost" data-leave>Leave room</button></div>
+        <div><span class="kicker">${t('Room code')}</span><b class="room-code">${esc(formatCode(room.code))}</b></div>
+        <div class="actions"><button class="btn" data-copy="link">${t('Copy invite link')}</button><button class="btn ghost" data-copy="code">${t('Copy code')}</button><button class="btn ghost" data-leave>${t('Leave room')}</button></div>
       </section>
-      <p class="muted">${n ? `${n + 1} people in the room.` : room.net.trackers ? 'Waiting for others to join…' : 'Connecting…'}${room.isHost() ? ' You\'re the host: pick a show and episode as usual, and everyone here watches it with you.' : ''}</p>
+      <p class="muted">${n ? t('{n} people in the room', { n: n + 1 }) + '.' : room.net.trackers ? t('Waiting for others to join…') : t('Connecting…')}${room.isHost() ? ' ' + t("You're the host: pick a show and episode as usual, and everyone here watches it with you.") : ''}</p>
       <div class="room-grid">
         <div>
-          <h3>Now watching</h3>
-          <p>${l ? `<a href="#/anime/${l.mediaId}">${esc(roomNow[l.mediaId] || 'Loading…')}</a> · Episode ${l.episode}` : '<span class="muted">Nothing yet. The host picks a show and episode as usual.</span>'}</p>
-          ${l && !room.isHost() && !player.current() ? '<div class="actions"><button class="btn" data-rejoin>Watch with the room</button></div>' : ''}
-          <h3>People</h3>
+          <h3>${t('Now watching')}</h3>
+          <p>${l ? `<a href="#/anime/${l.mediaId}">${esc(roomNow[l.mediaId] || t('Loading…'))}</a> · ${t('Episode {n}', { n: l.episode })}` : `<span class="muted">${t('Nothing yet. The host picks a show and episode as usual.')}</span>`}</p>
+          ${l && !room.isHost() && !player.current() ? `<div class="actions"><button class="btn" data-rejoin>${t('Watch with the room')}</button></div>` : ''}
+          <h3>${t('People')}</h3>
           <ul class="people">${people.map(p => `<li>
             <span class="avatar" aria-hidden="true">${esc((p.known === false ? '?' : p.name.trim()[0] || '?').toUpperCase())}</span>
-            <span class="person"><b>${esc(p.known === false ? 'Someone' : p.name)}${p === room.me ? ' <span class="muted">(you)</span>' : ''}</b>${status(p) ? `<span class="muted">${status(p)}</span>` : ''}</span>
-            ${p.id === room.host ? '<span class="badge host">Host</span>' : ''}
-            ${room.isHost() && p !== room.me && p.known ? `<button class="btn ghost" data-host="${esc(p.id)}">Make host</button>` : ''}
+            <span class="person"><b>${esc(p.known === false ? t('Someone') : p.name)}${p === room.me ? ` <span class="muted">${t('(you)')}</span>` : ''}</b>${status(p) ? `<span class="muted">${status(p)}</span>` : ''}</span>
+            ${p.id === room.host ? `<span class="badge host">${t('Host')}</span>` : ''}
+            ${room.isHost() && p !== room.me && p.known ? `<button class="btn ghost" data-host="${esc(p.id)}">${t('Make host')}</button>` : ''}
           </li>`).join('')}</ul>
           ${nameField}
         </div>
-        <section class="box room-chat" aria-label="Chat">
-          <h3>Chat</h3>
-          <div class="chat-log">${chat.map(c => `<p class="${c.mine ? 'mine' : ''}"><b>${esc(c.name)}</b> <time>${clock(c.at)}</time><span>${esc(c.text)}</span></p>`).join('') || '<p class="muted">No messages yet. While watching, the people icon at the top of the player opens a box to write in.</p>'}</div>
-          <form class="add" data-chat><input data-field="chat" maxlength="300" placeholder="Say something…" aria-label="Message the room" autocomplete="off"><button class="btn">Send</button></form>
+        <section class="box room-chat" aria-label="${t('Chat')}">
+          <h3>${t('Chat')}</h3>
+          <div class="chat-log">${chat.map(c => `<p class="${c.mine ? 'mine' : ''}"><b>${esc(c.name)}</b> <time>${clock(c.at)}</time><span>${esc(c.text)}</span></p>`).join('') || `<p class="muted">${t('No messages yet. While watching, the people icon at the top of the player opens a box to write in.')}</p>`}</div>
+          <form class="add" data-chat><input data-field="chat" maxlength="300" placeholder="${t('Say something…')}" aria-label="${t('Message the room')}" autocomplete="off"><button class="btn">${t('Send')}</button></form>
         </section>
       </div>
       <p class="err">${esc(roomError || room.problem)}</p></div>`
@@ -1548,7 +1565,7 @@ function togetherPage () {
     if (copy) {
       navigator.clipboard.writeText(copy.dataset.copy === 'link' ? inviteLink(room.code) : formatCode(room.code))
       const label = copy.textContent
-      copy.textContent = 'Copied'
+      copy.textContent = t('Copied')
       return setTimeout(() => { copy.textContent = label }, 1500)
     }
     if (e.target.closest('[data-rejoin]')) return room.load && followHost(room.load)
@@ -1571,7 +1588,7 @@ function togetherPage () {
       return room?.say(text)
     }
     const code = parseCode($app.querySelector('[data-field="code"]').value)
-    if (!code) { roomError = 'That isn\'t a room code. It looks like XXXX-XXXX-XXXX.'; return togetherPage() }
+    if (!code) { roomError = t("That isn't a room code. It looks like XXXX-XXXX-XXXX."); return togetherPage() }
     enterRoom(code)
   }
 }
@@ -1671,9 +1688,9 @@ function drawUpdate () {
   const u = updateState
   const el = document.querySelector('[data-updates]')
   if (el) {
-    const text = { checking: 'Checking for updates…', downloading: `Downloading version ${u.version}…`, ready: `Version ${u.version} is downloaded.`, latest: 'You have the latest version.', error: `Couldn't check for updates: ${u.error}` }[u.status] ?? ''
-    el.innerHTML = `<p class="muted">You have version ${esc(u.current ?? '')}. ${esc(text)}</p>
-      <div class="actions">${u.status === 'ready' ? `<button class="btn" data-update-install>Restart to update</button>` : `<button class="btn ghost" data-update-check ${['checking', 'downloading'].includes(u.status) ? 'disabled' : ''}>Check for updates</button>`}</div>`
+    const text = { checking: t('Checking for updates…'), downloading: t('Downloading version {version}…', { version: u.version }), ready: t('Version {version} is downloaded.', { version: u.version }), latest: t('You have the latest version.'), error: t("Couldn't check for updates: {error}", { error: u.error }) }[u.status] ?? ''
+    el.innerHTML = `<p class="muted">${t('You have version {version}.', { version: esc(u.current ?? '') })} ${esc(text)}</p>
+      <div class="actions">${u.status === 'ready' ? `<button class="btn" data-update-install>${t('Restart to update')}</button>` : `<button class="btn ghost" data-update-check ${['checking', 'downloading'].includes(u.status) ? 'disabled' : ''}>${t('Check for updates')}</button>`}</div>`
   }
   let toast = document.querySelector('.update-toast')
   if (u.status !== 'ready' || updateDismissed) return toast?.remove()
@@ -1683,7 +1700,7 @@ function drawUpdate () {
     toast.setAttribute('role', 'status')
     document.body.append(toast)
   }
-  toast.innerHTML = `<span>Kotakbase ${esc(u.version)} is ready</span><button class="btn" data-update-install>Restart</button><button class="update-x" data-update-dismiss aria-label="Later" title="Later (installs when you quit)">✕</button>`
+  toast.innerHTML = `<span>${t('Kotakbase {version} is ready', { version: esc(u.version) })}</span><button class="btn" data-update-install>${t('Restart')}</button><button class="update-x" data-update-dismiss aria-label="${t('Later')}" title="${t('Later (installs when you quit)')}">✕</button>`
 }
 document.addEventListener('click', e => {
   if (e.target.closest('[data-update-install]')) window.native.update.install()
@@ -1700,11 +1717,11 @@ async function offerAniList () {
   const modal = document.createElement('div')
   modal.className = 'modal'
   modal.innerHTML = `<div class="welcome" role="dialog" aria-labelledby="anilist-offer-title">
-    <h2 id="anilist-offer-title">Sync with AniList</h2>
-    <p>Sign in with your AniList account to bring in your watch history, and to keep your progress, Your List and ratings in sync both ways from now on.</p>
-    <p class="muted">You can also do this any time in Settings.</p>
+    <h2 id="anilist-offer-title">${t('Sync with AniList')}</h2>
+    <p>${t('Sign in with your AniList account to bring in your watch history, and to keep your progress, Your List and ratings in sync both ways from now on.')}</p>
+    <p class="muted">${t('You can also do this any time in Settings.')}</p>
     <div class="err"></div>
-    <div class="welcome-actions"><button class="btn ghost" data-skip>Skip for now</button><button class="btn" data-signin>Sign in with AniList</button></div>
+    <div class="welcome-actions"><button class="btn ghost" data-skip>${t('Skip for now')}</button><button class="btn" data-signin>${t('Sign in with AniList')}</button></div>
   </div>`
   document.body.append(modal)
   const close = () => { modal.remove(); document.removeEventListener('keydown', onKey) }
@@ -1715,11 +1732,11 @@ async function offerAniList () {
     const b = e.target.closest('[data-signin]')
     if (!b) return
     b.disabled = true
-    b.textContent = 'Waiting for AniList…'
+    b.textContent = t('Waiting for AniList…')
     const r = await sync.signIn()
     if (r.ok) return close() // the first sync asks before changing anything
     b.disabled = false
-    b.textContent = 'Sign in with AniList'
+    b.textContent = t('Sign in with AniList')
     modal.querySelector('.err').textContent = r.error
   }
   modal.querySelector('[data-signin]').focus()
@@ -1727,7 +1744,7 @@ async function offerAniList () {
 
 // A yes/no question in the app's own popup instead of the native confirm() box; resolves true for OK.
 // `body` is HTML, so callers escape anything that came from outside.
-function ask (title, body, ok = 'OK', cancel = 'Cancel') {
+function ask (title, body, ok = t('OK'), cancel = t('Cancel')) {
   const modal = document.createElement('div')
   modal.className = 'modal'
   modal.innerHTML = `<div class="welcome" role="alertdialog" aria-modal="true" aria-labelledby="ask-title">
@@ -1753,13 +1770,13 @@ function welcome () {
   const modal = document.createElement('div')
   modal.className = 'modal'
   modal.innerHTML = `<div class="welcome" role="dialog" aria-labelledby="welcome-title">
-    <h2 id="welcome-title">Welcome to Kotakbase</h2>
-    <p>Kotakbase finds episodes through extensions, and comes with none. Add at least one to start watching.</p>
-    <p class="muted">Paste a Hayase extension link (https://…/index.json, gh:user/repo or npm:package). You can add or remove extensions any time under Extensions in the top bar.</p>
-    <form class="add"><input placeholder="Extension link" aria-label="Extension link" required><button class="btn">Add</button></form>
+    <h2 id="welcome-title">${t('Welcome to Kotakbase')}</h2>
+    <p>${t('Kotakbase finds episodes through extensions, and comes with none. Add at least one to start watching.')}</p>
+    <p class="muted">${t('Paste a Hayase extension link (https://…/index.json, gh:user/repo or npm:package). You can add or remove extensions any time under Extensions in the top bar.')}</p>
+    <form class="add"><input placeholder="${t('Extension link')}" aria-label="${t('Extension link')}" required><button class="btn">${t('Add')}</button></form>
     <div class="err"></div>
     <ul class="welcome-added"></ul>
-    <div class="welcome-actions"><button class="btn ghost" data-skip>Skip for now</button></div>
+    <div class="welcome-actions"><button class="btn ghost" data-skip>${t('Skip for now')}</button></div>
   </div>`
   document.body.append(modal)
   const err = modal.querySelector('.err')
@@ -1783,7 +1800,7 @@ function welcome () {
     const add = e.target.querySelector('button')
     const before = new Set(Object.keys(ext.configs))
     add.disabled = true
-    err.textContent = 'Installing…'
+    err.textContent = t('Installing…')
     try { await ext.importRepo(input.value); err.textContent = '' } catch (x) { err.textContent = x.message }
     add.disabled = false
     // a link can install some sources and still report others as already there, so list whatever is new either way
@@ -1791,13 +1808,16 @@ function welcome () {
     if (!fresh.length) return
     added += fresh.length
     modal.querySelector('.welcome-added').insertAdjacentHTML('beforeend', fresh.map(c => `<li>✓ ${esc(c.name)}</li>`).join(''))
-    modal.querySelector('[data-skip]').textContent = 'Done'
+    modal.querySelector('[data-skip]').textContent = t('Done')
     input.value = ''
-    input.placeholder = 'Another extension link (optional)'
+    input.placeholder = t('Another extension link (optional)')
     input.focus()
   }
   input.focus()
 }
+// the top bar and player controls are in index.html: their text and labels are translated once here
+for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.textContent.trim())
+for (const attr of ['aria-label', 'title', 'placeholder']) for (const el of document.querySelectorAll(`[${attr}]`)) el.setAttribute(attr, t(el.getAttribute(attr)))
 if (firstLaunch) welcome()
 sync = createSync({ load, save, show: id => cache.get(id), native: window.native.anilist, onImported: route, ask })
 sync.start()

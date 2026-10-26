@@ -5,6 +5,8 @@
 // An entry here is { status, progress, stars }: AniList's status (PAUSED and REPEATING count as CURRENT), episodes
 // fully watched, and 0-5 stars (AniList's 0-100 score / 20).
 
+import { t, language } from './i18n.js'
+
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
 export const toStars = score => score ? Math.min(5, Math.max(1, Math.round(score / 20))) : 0
 const norm = status => status === 'PAUSED' || status === 'REPEATING' ? 'CURRENT' : status
@@ -173,7 +175,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
         const failed = r.status === 0 || r.status === 429 || r.status >= 500
         // anything else (sent, or refused, e.g. a show AniList no longer has) leaves the queue
         if (!failed) save(OUTBOX, dequeue(load(OUTBOX, {}), id, box[id]))
-        problem = !failed ? '' : r.status === 429 ? 'AniList is busy, waiting a moment' : 'AniList unreachable'
+        problem = !failed ? '' : r.status === 429 ? t('AniList is busy, waiting a moment') : t('AniList unreachable')
         if (r.status >= 400 && !failed) console.warn('AniList refused a change:', r.error)
         notify()
         const wait = r.skipped ? 0 : nextDelay(r.status, r.retryAfter, fails)
@@ -191,7 +193,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     const first = !active()
     const r = await native.query(LIST_QUERY, { userId: account.user.id })
     if (r.status === 401) { account = await native.account(); notify(); return }
-    if (r.status !== 200) throw new Error(r.status === 0 ? 'AniList unreachable' : `AniList: ${r.error || r.status}`)
+    if (r.status !== 200) throw new Error(r.status === 0 ? t('AniList unreachable') : `AniList: ${r.error || r.status}`)
     const remote = new Map()
     for (const e of r.data.MediaListCollection.lists.flatMap(l => l.entries)) if (!e.media?.isAdult) remote.set(e.mediaId, e) // custom lists repeat entries
     const old = first ? {} : base().entries
@@ -207,10 +209,10 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
       if (!same(L, T)) imports.push([id, T])
       if (!same(view(remote.get(id) && fromApi(remote.get(id))), T)) sends.push(id)
     }
-    const shows = n => `${n} show${n === 1 ? '' : 's'}`
-    if (first && (imports.length || sends.length) && !await ask(`First AniList sync for ${account.user.name}`,
-      `<ul class="ask-list"><li><b>${shows(imports.length)}</b> from AniList go into Kotakbase</li><li><b>${shows(sends.length)}</b> from Kotakbase go to your AniList list</li></ul>
-      <p class="muted">Progress is never lowered on either side. Cancel signs you out and changes nothing.</p>`, 'Sync', 'Cancel')) {
+    const shows = n => `<b>${t('{n} shows', { n })}</b>`
+    if (first && (imports.length || sends.length) && !await ask(t('First AniList sync for {name}', { name: account.user.name }),
+      `<ul class="ask-list"><li>${t('{shows} from AniList go into Kotakbase', { shows: shows(imports.length) })}</li><li>${t('{shows} from Kotakbase go to your AniList list', { shows: shows(sends.length) })}</li></ul>
+      <p class="muted">${t('Progress is never lowered on either side. Cancel signs you out and changes nothing.')}</p>`, t('Sync'), t('Cancel'))) {
       account = await native.signOut()
       notify()
       return
@@ -223,7 +225,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     snapshot(locals())
     if (first) {
       save(OUTBOX, {})
-      note = `Imported ${imports.length} show${imports.length === 1 ? '' : 's'}, sending ${sends.length} to AniList.`
+      note = t('Imported {imported}, sending {sent} to AniList.', { imported: t('{n} shows', { n: imports.length }), sent: sends.length })
     }
     sends.forEach(id => enqueue(id))
     if (imports.length) onImported?.()
@@ -266,14 +268,15 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
 
   const ago = at => {
     const m = Math.round((Date.now() - at) / 60000)
-    return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `on ${new Date(at).toLocaleDateString()}`
+    const rtf = new Intl.RelativeTimeFormat(language(), { numeric: 'auto' })
+    return m < 1 ? t('just now') : m < 60 ? rtf.format(-m, 'minute') : m < 1440 ? rtf.format(-Math.round(m / 60), 'hour') : new Date(at).toLocaleDateString(language())
   }
   function statusText () {
     const n = pending()
-    if (syncing) return 'Syncing…'
-    if (n) return `${n} change${n === 1 ? '' : 's'} waiting${problem ? `, ${problem}` : ', sending…'}`
-    if (problem) return `Couldn't sync: ${problem}`
-    return base()?.at ? `Synced ${ago(base().at)}` : ''
+    if (syncing) return t('Syncing…')
+    if (n) return `${t('{n} changes waiting', { n })}, ${problem || t('sending…')}`
+    if (problem) return t("Couldn't sync: {error}", { error: problem })
+    return base()?.at ? t('Synced: {when}', { when: ago(base().at) }) : ''
   }
 
   // Settings → AniList, drawn into `el`; redrawn while it's on screen
@@ -297,16 +300,16 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
       const a = account
       const user = a?.user && `<img class="anilist-avatar" src="${esc(a.user.avatar)}" alt=""><b>${esc(a.user.name)}</b>`
       el.innerHTML = !a ? '' : !a.configured
-        ? '<p class="muted">AniList sync isn\'t set up in this build (no AniList Client ID).</p>'
+        ? `<p class="muted">${t("AniList sync isn't set up in this build (no AniList Client ID).")}</p>`
         : !a.user
-            ? `<p class="muted">Keep your progress, Your List and ratings in sync with your AniList list. Kotakbase only changes the entries of shows you watch, list or rate here.</p>
-              <div class="actions"><button class="btn" data-anilist-signin>Sign in with AniList</button></div>`
+            ? `<p class="muted">${t('Keep your progress, Your List and ratings in sync with your AniList list. Kotakbase only changes the entries of shows you watch, list or rate here.')}</p>
+              <div class="actions"><button class="btn" data-anilist-signin>${t('Sign in with AniList')}</button></div>`
             : a.expired
-              ? `<div class="actions anilist-user">${user}</div><p class="err">Your AniList sign-in expired or was revoked, so nothing is being synced.</p>
-                <div class="actions"><button class="btn" data-anilist-signin>Sign in again</button><button class="btn ghost" data-anilist-signout>Sign out</button></div>`
+              ? `<div class="actions anilist-user">${user}</div><p class="err">${t('Your AniList sign-in expired or was revoked, so nothing is being synced.')}</p>
+                <div class="actions"><button class="btn" data-anilist-signin>${t('Sign in again')}</button><button class="btn ghost" data-anilist-signout>${t('Sign out')}</button></div>`
               : `<div class="actions anilist-user">${user}<span class="muted">${esc(statusText())}</span></div>
                 ${note ? `<p class="muted">${esc(note)}</p>` : ''}
-                <div class="actions"><button class="btn ghost" data-anilist-sync ${syncing ? 'disabled' : ''}>Sync now</button><button class="btn ghost" data-anilist-signout>Sign out</button></div>`
+                <div class="actions"><button class="btn ghost" data-anilist-sync ${syncing ? 'disabled' : ''}>${t('Sync now')}</button><button class="btn ghost" data-anilist-signout>${t('Sign out')}</button></div>`
       if (error) el.insertAdjacentHTML('beforeend', `<p class="err">${esc(error)}</p>`)
     }
     listeners.add(draw)
@@ -320,7 +323,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
       if (e.target.closest('[data-anilist-sync]')) return syncNow()
       if (e.target.closest('[data-anilist-signout]')) {
         const n = pending()
-        if (n && !await ask('Sign out of AniList?', `<p>${n} change${n === 1 ? '' : 's'} haven't reached AniList yet and will be dropped.</p>`, 'Sign out')) return
+        if (n && !await ask(t('Sign out of AniList?'), `<p>${t("{n} changes haven't reached AniList yet and will be dropped.", { n })}</p>`, t('Sign out'))) return
         account = await native.signOut()
         save(BASE, null)
         save(OUTBOX, {})

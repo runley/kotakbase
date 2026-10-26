@@ -2,6 +2,7 @@
 // clock; anyone can pause, play or seek (that goes through the host); the host can hand over to someone else, and if
 // the host leaves, whoever joined first takes over.
 import { joinRoom } from './room-net.js'
+import { t as tr } from './i18n.js' // tr: messages here have a `t` (their type)
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O or 1/I
 export const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), b => CODE_CHARS[b % 32]).join('')
@@ -113,7 +114,7 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
     if (!peer) return
     // the host's app sent something this one can't read (most likely another version): say so rather than ignore it
     if (!valid(m)) {
-      if (from === host && !problem) { problem = 'The host\'s Kotakbase sent something this one can\'t read. Make sure you both have the latest version (Settings → Updates).'; changed() }
+      if (from === host && !problem) { problem = tr("The host's Kotakbase sent something this one can't read. Make sure you both have the latest version (Settings → Updates)."); changed() }
       return
     }
     if (m.t === 'hello') {
@@ -122,7 +123,7 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
       return changed()
     }
     if (m.t === 'host' && from === host) return setHost(m.id)
-    if (m.t === 'chat') return addChat(peer.known ? peer.name : 'Someone', m.text.trim(), false)
+    if (m.t === 'chat') return addChat(peer.known ? peer.name : tr('Someone'), m.text.trim(), false)
     if (m.t === 'status') { peer.buffering = m.buffering; peer.key = m.key; return changed() }
     if (m.t === 'control' && isHost()) {
       const p = playerNow()
@@ -180,7 +181,7 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
 
   const connection = await joinRoom(code, {
     onOpen (id, channel) {
-      const peer = { id, name: 'Connecting…', since: Infinity, channel, buffering: false, key: null, known: false }
+      const peer = { id, name: tr('Connecting…'), since: Infinity, channel, buffering: false, key: null, known: false }
       members.set(id, peer)
       channel.onmessage = e => {
         if (typeof e.data !== 'string' || e.data.length > 16_384) return

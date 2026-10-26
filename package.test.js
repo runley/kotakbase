@@ -15,5 +15,5 @@ test('every module the main process imports is packaged', () => {
   }
   walk('main.js')
   walk('preload.cjs')
-  for (const f of seen) assert.ok(files.includes(f), `${f} is imported by the main process but missing from build.files`)
+  for (const f of seen) assert.ok(files.includes(f) || (f.startsWith('ui/') && files.includes('ui/**/*')), `${f} is imported by the main process but missing from build.files`)
 })

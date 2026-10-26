@@ -1,6 +1,7 @@
 import JASSUB from './vendor/jassub.js'
 import { LANGS, langOf, pickTrack, pickSubTrack } from './lang.js'
 import { MpvVideo } from './mpv-video.js'
+import { t as tr } from './i18n.js' // tr: `t` is a subtitle/audio track throughout this file
 
 const $player = document.getElementById('player')
 let $root = $player // holds the player's controls: #player itself, or in mpv mode its stand-in in the overlay window
@@ -44,7 +45,7 @@ export const LANG_DEFAULTS = { audioLangs: ['jpn'], subLangs: ['eng'] }
 export function langPrefs (key) {
   try { return JSON.parse(localStorage.getItem(key)) ?? LANG_DEFAULTS[key] } catch { return LANG_DEFAULTS[key] }
 }
-const trackLabel = t => [t.name || t.label, LANGS[langOf(t)]?.[0] ?? t.language].filter(Boolean).join(' · ') || `Track ${t.number ?? ''}`
+const trackLabel = t => [t.name || t.label, LANGS[langOf(t)] ? tr(LANGS[langOf(t)][0]) : t.language].filter(Boolean).join(' · ') || tr('Track {n}', { n: t.number ?? '' })
 
 // matroska stores each ASS line as "ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text", which libass takes directly.
 // matroska-subtitles drops ReadOrder and libass drops repeated ReadOrders, so give every distinct line its own (seek replays still dedupe).
@@ -85,7 +86,7 @@ async function selectTrack (n) {
 
 function renderSubMenu () {
   const s = state
-  const items = [[null, 'Off'], ...Object.values(s.tracks).map(t => [t.number, trackLabel(t)])]
+  const items = [[null, tr('Off')], ...Object.values(s.tracks).map(t => [t.number, trackLabel(t)])]
   $('p-subs').innerHTML = ''
   for (const [n, label] of items) {
     const b = document.createElement('button')
@@ -126,7 +127,7 @@ function offerBuiltin (s, text) {
   $('p-loading').textContent = text
   const btn = $('p-skip')
   btn.hidden = false
-  btn.textContent = 'Play with the built-in player'
+  btn.textContent = tr('Play with the built-in player')
   btn.dataset.to = 'builtin'
 }
 
@@ -180,7 +181,7 @@ export async function play (opts) {
   else window.native.mpv.quit() // one left idle by a previous episode in mpv mode
   $('p-title').textContent = opts.title
   $('p-ep').textContent = opts.subtitle
-  $('p-loading').textContent = opts.local ? 'Loading…' : 'Loading torrent…'
+  $('p-loading').textContent = opts.local ? tr('Loading…') : tr('Loading torrent…')
   $root.querySelector('.p-stats').hidden = !!opts.local // no peers or speeds for a download played from disk
   $('p-subs').hidden = true
   $root.querySelector('[data-p=prev]').hidden = !opts.hasPrev
@@ -217,7 +218,7 @@ export async function play (opts) {
   let src
   // opts.local: a downloaded episode ({ id, index }), played from disk
   try { src = await (opts.local ? window.native.downloads.play(opts.local.id, opts.local.index, useMpv) : window.native.play(opts.link, opts.episode, opts.fileIndex, opts.numbering, useMpv)) } catch (e) {
-    if (state === s) $('p-loading').textContent = `Can't play this torrent: ${reason(e)}`
+    if (state === s) $('p-loading').textContent = tr("Can't play this torrent: {error}", { error: tr(reason(e)) })
     return
   }
   const mpvError = await mpvStarted
@@ -246,10 +247,10 @@ export async function play (opts) {
     }
     loadChapters(s)
   }
-  video.onwaiting = () => { s.buffering = true; $('p-loading').textContent = 'Buffering…' }
+  video.onwaiting = () => { s.buffering = true; $('p-loading').textContent = tr('Buffering…') }
   video.onplaying = () => { s.buffering = false; $('p-loading').textContent = '' }
   video.onerror = () => {
-    const text = `Can't play this file (${video.error?.message || 'unsupported format'})`
+    const text = tr("Can't play this file ({error})", { error: video.error?.message || tr('unsupported format') })
     if (useMpv) offerBuiltin(s, text)
     else $('p-loading').textContent = text
   }
@@ -289,13 +290,13 @@ function showSkip (s) {
   const btn = $('p-skip')
   if (s.failed) return // it's offering the built-in player
   // no playable audio (Dolby/DTS only): this button offers another source instead, for as long as the episode plays
-  if (s.noAudio) { btn.hidden = false; btn.textContent = 'No audio in this release: pick another source'; btn.dataset.to = 'sources'; return }
+  if (s.noAudio) { btn.hidden = false; btn.textContent = tr('No audio in this release: pick another source'); btn.dataset.to = 'sources'; return }
   const t = s.video.currentTime
   const seg = s.chapters.find(c => c.kind && t >= c.start && t < c.end - 1)
   btn.hidden = !seg
   if (!seg) return
   const toNext = seg.kind === 'ed' && seg.end >= s.video.duration - 2 && s.opts.hasNext
-  btn.textContent = seg.kind === 'op' ? 'Skip Intro' : toNext ? 'Next Episode' : 'Skip Credits'
+  btn.textContent = seg.kind === 'op' ? tr('Skip Intro') : toNext ? tr('Next Episode') : tr('Skip Credits')
   btn.dataset.to = toNext ? 'next' : seg.end
 }
 
@@ -522,15 +523,15 @@ function openMenu (e) {
   const audio = [...(v.audioTracks ?? [])]
   cm.replaceChildren()
   buildMenu(cm, [
-    ['Audio', audio.length ? audio.map((t, i) => [trackLabel(t) || `Track ${i + 1}`, t.enabled, () => audio.forEach((a, k) => { a.enabled = k === i })]) : [['Default', true]]],
-    ['Subtitles', [['Off', s.active == null, () => selectTrack(null)], ...Object.values(s.tracks).map(t => [trackLabel(t), s.active === t.number, () => selectTrack(t.number)])]],
-    ['Chapters', s.chapters.length
-      ? s.chapters.map(c => [`${fmtTime(c.start)}  ${c.title || 'Chapter'}`, chapterAt(s, v.currentTime) === c, () => { v.currentTime = c.start }])
-      : [['No chapters', false]]],
-    ['Playback Rate', [0.5, 0.75, 1, 1.25, 1.5, 2].map(r => [`${r}x`, v.playbackRate === r, () => { v.playbackRate = r }])],
-    ['Fullscreen', toggleFullscreen],
+    [tr('Audio'), audio.length ? audio.map((t, i) => [trackLabel(t) || tr('Track {n}', { n: i + 1 }), t.enabled, () => audio.forEach((a, k) => { a.enabled = k === i })]) : [[tr('Default'), true]]],
+    [tr('Subtitles'), [[tr('Off'), s.active == null, () => selectTrack(null)], ...Object.values(s.tracks).map(t => [trackLabel(t), s.active === t.number, () => selectTrack(t.number)])]],
+    [tr('Chapters'), s.chapters.length
+      ? s.chapters.map(c => [`${fmtTime(c.start)}  ${c.title || tr('Chapter')}`, chapterAt(s, v.currentTime) === c, () => { v.currentTime = c.start }])
+      : [[tr('No chapters'), false]]],
+    [tr('Playback Rate'), [0.5, 0.75, 1, 1.25, 1.5, 2].map(r => [`${r}x`, v.playbackRate === r, () => { v.playbackRate = r }])],
+    [tr('Fullscreen'), toggleFullscreen],
     // mpv's video isn't a <video> the browser can float
-    ...s.mpv ? [] : [['Picture in Picture', () => document.pictureInPictureElement ? document.exitPictureInPicture() : v.requestPictureInPicture()]]
+    ...s.mpv ? [] : [[tr('Picture in Picture'), () => document.pictureInPictureElement ? document.exitPictureInPicture() : v.requestPictureInPicture()]]
   ])
   cm.hidden = false
   const w = cm.offsetWidth

@@ -9,6 +9,7 @@ A Windows desktop app for streaming anime from torrents. It plays episodes while
 - **Watch Together**: watch with friends on other devices; pausing, playing and seeking happen for everyone, and there's a chat.
 - **Downloads**: save a season or single episodes to watch offline.
 - **Updates itself** from this page's releases.
+- **In your language**: English, Українська, Қазақша, Русский, Deutsch, Español, 简体中文, 繁體中文 and 日本語, following your system language (or pick one in Settings).
 
 ![A show page: episodes, watch and download buttons, genres and tags](docs/show.jpg)
 

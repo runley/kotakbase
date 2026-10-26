@@ -1,4 +1,5 @@
 // Hayase-compatible extension manager: same manifest JSON, same gh:/npm:/http URL rules, same source API.
+import { t } from './i18n.js'
 const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
 const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
 
@@ -13,7 +14,7 @@ const after = url => url.slice(url.indexOf(':') + 1)
 // gh:user/repo[/path] and npm:pkg[/path] resolve through esm.sh, exactly like Hayase
 function jsonUrl (url) {
   if (url.startsWith('http')) return url
-  if (!/^(gh|npm):/.test(url)) throw new Error('Invalid URL')
+  if (!/^(gh|npm):/.test(url)) throw new Error(t('Invalid URL'))
   const u = `https://esm.sh${url.startsWith('gh:') ? '/gh' : ''}/${after(url)}`
   return u.endsWith('.json') ? u : `${u}/index.json`
 }
@@ -23,7 +24,7 @@ function jsUrl (url) {
   const parts = after(url).split('/')
   if (url.startsWith('gh:')) return `https://esm.sh/gh/${parts[0]}/${parts[1]}/es2022/${parts.slice(2).join('/')}.mjs`
   if (url.startsWith('npm:')) return `https://esm.sh/${parts[0]}/es2022/${parts.slice(1).join('/')}.mjs`
-  throw new Error('Invalid URL')
+  throw new Error(t('Invalid URL'))
 }
 
 const REQUIRED = ['name', 'version', 'id', 'type', 'accuracy', 'icon', 'update', 'code']
@@ -31,7 +32,7 @@ const valid = c => c && typeof c === 'object' && REQUIRED.every(k => k in c)
 
 async function fetchManifest (url) {
   const res = await fetch(jsonUrl(url.trim().replace(/\/+$/, '')))
-  if (!res.ok) throw new Error(`Manifest request failed (${res.status})`)
+  if (!res.ok) throw new Error(t('Manifest request failed ({status})', { status: res.status }))
   return [].concat(await res.json())
 }
 
@@ -69,11 +70,11 @@ async function install (config) {
 // User pastes a manifest URL (same links that work in Hayase).
 export async function importRepo (url) {
   const list = await fetchManifest(url)
-  if (!list.every(valid)) throw new Error('Not a valid Hayase extension manifest')
+  if (!list.every(valid)) throw new Error(t('Not a valid Hayase extension manifest'))
   const skipped = list.filter(c => configs[c.id]).map(c => c.id)
   for (const c of list.filter(c => !configs[c.id])) await install(c)
   persist()
-  if (skipped.length) throw new Error(`Already installed, delete first to replace: ${skipped.join(', ')}`)
+  if (skipped.length) throw new Error(t('Already installed, delete first to replace: {names}', { names: skipped.join(', ') }))
 }
 
 export function remove (id) {
@@ -133,10 +134,10 @@ export async function search (query, { movie, batch }, onUpdate) {
           } else byHash.set(r.hash, { ...r, extensions: new Set([id]), titles: new Set([r.title]) })
         }
       // a site that's down answers with an HTML error page, which the extension then fails to read as JSON
-      }, e => errors.push(`${c.name} (${fn}): ${/not valid JSON|Unexpected token '<'/.test(e.message) ? "the site sent an error page instead of results (it's probably down; try again later)" : e.message}`)).then(() => onUpdate?.(rank([...byHash.values()]), errors)))
+      }, e => errors.push(`${c.name} (${fn}): ${/not valid JSON|Unexpected token '<'/.test(e.message) ? t("the site sent an error page instead of results (it's probably down; try again later)") : e.message}`)).then(() => onUpdate?.(rank([...byHash.values()]), errors)))
     }
   }
-  if (!jobs.length) throw new Error('No torrent extensions enabled. Add one in Extensions.')
+  if (!jobs.length) throw new Error(t('No torrent extensions enabled. Add one in Extensions.'))
   await Promise.all(jobs)
   const results = [...byHash.values()]
   // some extensions (Seadex) send no seeder counts; ask the trackers, as Hayase does, so those results aren't shown as dead
