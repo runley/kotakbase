@@ -17,7 +17,6 @@ Kotakbase only contacts the services below, and only to do what's described. Eac
 - **AniList** (anilist.co): show details, schedules and search. If you sign in, your progress, list and ratings are read from and written to your AniList account.
 - **MyAnimeList** (myanimelist.net): show details when AniList is unavailable.
 - **ani.zip** and **AniSkip** (aniskip.com): episode details, and opening/ending times for the "Skip Intro" button.
-- **Shikimori** (shikimori.io), only when Kotakbase is in Russian or Kazakh: Russian show titles and descriptions, looked up by the shows' MyAnimeList ids.
 - **Discord**, if the Discord desktop app is running and the setting is on: the title, episode, cover image and playback position of what you're watching are shared with Discord to show on your profile. Turn it off in Settings → Discord.
 - **GitHub** (github.com): checking for and downloading Kotakbase updates. This website and its invite pages are also hosted by GitHub Pages; an invite link's room code stays in your browser and isn't sent to GitHub.
 - **Google Fonts**: the fonts the app's pages use.
