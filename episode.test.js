@@ -38,6 +38,14 @@ test('pickFile', () => {
   // Re:Zero S2 Part 2 ep 1 in an all-seasons pack: S02E14, not S01E14 or S02E01
   const all = [1, 2].flatMap(s => Array.from({ length: 25 }, (_, i) => ({ name: `Re Zero S0${s}E${String(i + 1).padStart(2, '0')}.mkv` })))
   assert.equal(pickFile(all, 1, { abs: 39, tvdbSeason: 2, tvdbSeasonEpisode: 14 }).name, 'Re Zero S02E14.mkv')
+  // Solo Leveling S2 ep 1 (series-wide 13) in a season-2 pack numbered per season: S02E01, never the finale S02E13
+  const solo = Array.from({ length: 13 }, (_, i) => ({ name: `Solo Leveling - S02E${String(i + 1).padStart(2, '0')}.mkv` }))
+  const ids = { abs: 13, tvdbSeason: 2, tvdbSeasonEpisode: 1 }
+  assert.equal(pickFile(solo, 1, ids).name, 'Solo Leveling - S02E01.mkv')
+  assert.equal(findEpisode(solo, 1, ids).name, 'Solo Leveling - S02E01.mkv')
+  // ... while a full-series pack numbered on from season 1 still gets file 13
+  const series = Array.from({ length: 25 }, (_, i) => ({ name: `Solo Leveling - ${String(i + 1).padStart(2, '0')}.mkv` }))
+  assert.equal(pickFile(series, 1, ids).name, 'Solo Leveling - 13.mkv')
 })
 
 test('findEpisode: only a real match, never a positional guess', () => {

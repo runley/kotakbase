@@ -31,5 +31,9 @@ const sortedVideos = files => files.filter(f => VIDEO.test(f.name)).sort((a, b) 
 export function findEpisode (files, episode, ids = {}) {
   const videos = regular(sortedVideos(files))
   const find = (n, season) => n && videos.find(f => episodeOf(f.name) === n && (!season || fileSeason(f.name) == null || fileSeason(f.name) === season))
-  return find(ids.abs) || find(ids.tvdbSeasonEpisode, ids.tvdbSeason) || find(episode) || null
+  // the series-wide number never applies to a file naming this TVDB season, which numbers within it: in a season-2
+  // pack of S02E01–S02E13, Solo Leveling S2's first episode (series-wide 13) is S02E01, and S02E13 is the finale
+  const perSeason = ids.tvdbSeason && ids.abs !== ids.tvdbSeasonEpisode
+  const abs = ids.abs && videos.find(f => episodeOf(f.name) === ids.abs && !(perSeason && fileSeason(f.name) === ids.tvdbSeason))
+  return abs || find(ids.tvdbSeasonEpisode, ids.tvdbSeason) || find(episode) || null
 }
