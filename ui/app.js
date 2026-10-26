@@ -228,8 +228,8 @@ const related = id => once('related' + id, async () => {
 const epCount = m => m.episodes ?? (m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : 1)
 // episodes out so far: an airing show's planned total hasn't all aired yet
 const airedCount = m => m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : epCount(m)
-// Japanese: the original title (AniList's search finds those too); otherwise English, then romaji
-const title = m => (language() === 'ja' && m.title.native) || (m.title.english ?? m.title.userPreferred ?? m.title.romaji)
+// Japanese: the romaji title, which is what AniList's search finds (it doesn't match Japanese script); otherwise English
+const title = m => (language() === 'ja' && m.title.romaji) || (m.title.english ?? m.title.userPreferred ?? m.title.romaji)
 const FORMAT = { TV: 'TV Series', TV_SHORT: 'TV Short', MOVIE: 'Movie', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Special' }
 const fmt = f => FORMAT[f] ? t(FORMAT[f]) : (f ?? '')
 const STATUS = { RELEASING: 'Releasing', FINISHED: 'Finished', NOT_YET_RELEASED: 'Not yet released', CANCELLED: 'Cancelled', HIATUS: 'On hiatus' }
@@ -615,7 +615,7 @@ async function detail (id) {
     <div class="show-head">
       <img src="${esc(m.coverImage.extraLarge)}" alt="">
       <div>
-        <div class="show-native">${esc(language() === 'ja' ? (m.title.english ?? m.title.romaji) : m.title.native)}</div>
+        <div class="show-native">${esc(m.title.native)}</div>
         <h1>${esc(title(m))}</h1>
         <div class="tags">
           <span class="pill">${p ? `${Math.min(current, total)} / ${t('{n} episodes', { n: total })}` : t('{n} episodes', { n: total })}</span>
