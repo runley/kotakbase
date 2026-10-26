@@ -9,7 +9,7 @@ import bencode from 'bencode'
 import { SubtitleStream } from 'matroska-subtitles'
 import { pickFile, findEpisode, VIDEO, RISKY } from './episode.js'
 import { readChapters } from './chapters.js'
-import { readFonts, isFont } from './fonts.js'
+import { readFonts, readEnd, isFont } from './mkv.js'
 import { createLog, redact } from './diagnostics.js'
 import { Mpv } from './mpv.js'
 import { setupAniList } from './anilist-auth.js'
@@ -254,7 +254,10 @@ function serve (file, torrent, key, mpvMode) {
   const playing = current
   const chapters = /\.mkv$/i.test(file.name) ? readChapters(file.createReadStream({ start: 0, end: Math.min(file.length - 1, 32 * 1024 * 1024) })) : Promise.resolve([])
   chapters.then(list => { if (current === playing) send('chapters', list) })
-  if (/\.mkv$/i.test(file.name) && !mpvMode) readFonts(file).then(fonts => fonts.forEach(f => sendFont(playing, f))) // mpv loads them itself
+  if (/\.mkv$/i.test(file.name) && !mpvMode) {
+    readFonts(file).then(fonts => fonts.forEach(f => sendFont(playing, f))) // mpv loads them itself
+    readEnd(file).then(end => { if (end && current === playing) send('file-end', end) }) // the header's length can be wrong
+  }
   return { url: `http://127.0.0.1:${server.address().port}${current.path}`, name: file.name }
 }
 

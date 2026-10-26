@@ -1,7 +1,8 @@
 import { EbmlTagId, Tools } from 'ebml-stream'
 
-// Fonts embedded in an MKV, wherever the muxer put them. Many releases put the attachments after the video data,
-// where reading subtitles from the start of the stream never gets to, so jump there using the SeekHead (the file's index).
+// Reading an MKV's index without playing it: the fonts embedded in it, wherever the muxer put them (many releases put
+// the attachments after the video data, where reading subtitles from the start of the stream never gets to), and where
+// the video really ends. Both jump straight there using the SeekHead (the file's index).
 export const isFont = f => /font|ttf|otf|ttc/i.test(f.mimetype + f.filename)
 
 function read (file, start, length) {
@@ -55,25 +56,58 @@ async function element (file, segment, pos, max) {
   return { buf: await read(file, segment + pos, h.data + h.size), h }
 }
 
+const uint = (buf, c) => hex(buf, c.data, c.data + c.size)
+
+// The file's index: the head (the elements before the video data), the segment's header and every SeekHead entry;
+// null when it isn't an MKV.
+async function index (file) {
+  const top = await read(file, 0, 256 * 1024)
+  const ebml = header(top, 0)
+  const segment = ebml && header(top, ebml.data + ebml.size)
+  if (segment?.id !== EbmlTagId.Segment) return null
+  const head = []
+  let entries = []
+  for (const c of children(top, segment.data, top.length)) {
+    if (c.id === EbmlTagId.Cluster) break
+    head.push(c)
+    if (c.id === EbmlTagId.SeekHead) entries.push(...seeks(top, c.data, c.data + c.size))
+  }
+  // some muxers keep a second SeekHead at the end, pointed to by the first
+  for (const [, pos] of entries.filter(([id]) => id === EbmlTagId.SeekHead)) {
+    const more = await element(file, segment.data, pos, 1024 * 1024)
+    if (more) entries = entries.concat(seeks(more.buf, more.h.data, more.buf.length))
+  }
+  return { top, head, segment: segment.data, entries }
+}
+
+// Where the video really ends, in seconds: the last entry of the Cues (the seek index the muxer writes from the video
+// itself). Some releases state twice the real length in their header (Judas' Solo Leveling S2 v2: 47:16 for 23:38),
+// and the player would trust that. null when there are no Cues or the file can't be read.
+export async function readEnd (file) {
+  try {
+    const idx = await index(file)
+    const at = idx?.entries.find(([id]) => id === EbmlTagId.Cues)
+    const cues = at && await element(file, idx.segment, at[1], 16 * 1024 * 1024)
+    if (!cues) return null
+    const info = idx.head.find(c => c.id === EbmlTagId.Info)
+    const scale = (info && [...children(idx.top, info.data, info.data + info.size)].find(c => c.id === EbmlTagId.TimecodeScale)) || null
+    let last = null
+    for (const p of children(cues.buf, cues.h.data, cues.buf.length)) {
+      if (p.id !== EbmlTagId.CuePoint) continue
+      for (const c of children(cues.buf, p.data, p.data + p.size)) if (c.id === EbmlTagId.CueTime) last = Math.max(last ?? 0, uint(cues.buf, c))
+    }
+    return last == null ? null : last * (scale ? uint(idx.top, scale) : 1e6) / 1e9
+  } catch {
+    return null
+  }
+}
+
 // -> [{ filename, mimetype, data }] of the font attachments; [] when there are none or the file can't be read.
 export async function readFonts (file) {
   try {
-    const top = await read(file, 0, 256 * 1024)
-    const ebml = header(top, 0)
-    const segment = ebml && header(top, ebml.data + ebml.size)
-    if (segment?.id !== EbmlTagId.Segment) return []
-    let entries = []
-    for (const c of children(top, segment.data, top.length)) {
-      if (c.id === EbmlTagId.Cluster) break
-      if (c.id === EbmlTagId.SeekHead) entries.push(...seeks(top, c.data, c.data + c.size))
-    }
-    // some muxers keep a second SeekHead at the end, pointed to by the first
-    for (const [, pos] of entries.filter(([id]) => id === EbmlTagId.SeekHead)) {
-      const more = await element(file, segment.data, pos, 1024 * 1024)
-      if (more) entries = entries.concat(seeks(more.buf, more.h.data, more.buf.length))
-    }
-    const at = entries.find(([id]) => id === EbmlTagId.Attachments)
-    const attachments = at && await element(file, segment.data, at[1], 256 * 1024 * 1024)
+    const idx = await index(file)
+    const at = idx?.entries.find(([id]) => id === EbmlTagId.Attachments)
+    const attachments = at && await element(file, idx.segment, at[1], 256 * 1024 * 1024)
     if (!attachments) return []
     const { buf, h } = attachments
     const fonts = []

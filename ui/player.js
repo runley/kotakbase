@@ -175,7 +175,13 @@ export async function play (opts) {
   // the main process swaps torrents itself, which keeps a batch torrent loaded when moving to its next episode
   close(false, false, useMpv)
   const video = useMpv ? new MpvVideo() : document.createElement('video')
-  const s = state = { opts, video, mpv: useMpv, tracks: {}, cues: {}, fonts: [], order: new Map(), active: null, jassub: null, off: [], fileChapters: null, chapters: [] }
+  const s = state = { opts, video, mpv: useMpv, tracks: {}, cues: {}, fonts: [], order: new Map(), active: null, jassub: null, off: [], fileChapters: null, chapters: [], end: null }
+  if (!useMpv) {
+    // some releases' headers overstate the length (47:16 for a 23:38 episode); the main process reads where the video
+    // really ends (s.end), and everything that asks for the duration (time bar, progress, next episode, room) gets that
+    const native = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'duration').get
+    Object.defineProperty(video, 'duration', { get () { const d = native.call(this); return s.end && d - s.end > 60 ? s.end : d } })
+  }
   $player.hidden = false
   pushPlayerEntry()
   $('player-video').replaceChildren(...(useMpv ? [] : [video]))
@@ -208,6 +214,10 @@ export async function play (opts) {
     if (s.active === n && s.jassub) feed(sub, n)
   }))
   s.off.push(window.native.on('chapters', list => { s.fileChapters = list; loadChapters(s) }))
+  s.off.push(window.native.on('file-end', end => {
+    s.end = end
+    for (const c of s.chapters) c.end = Math.min(c.end, video.duration) // a last chapter that ran to the header's end
+  }))
   s.off.push(window.native.on('sub-font', data => {
     s.fonts.push(data)
     s.jassub?.ready.then(() => s.jassub.renderer.addFonts([data])).catch(() => {})
