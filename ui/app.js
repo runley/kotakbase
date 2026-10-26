@@ -842,7 +842,7 @@ function settingsPage () {
   }
   $app.onchange = e => {
     // the whole app is drawn in the chosen language at start, so switching reloads it
-    if (e.target.matches('[data-language]')) { e.target.value ? save('language', e.target.value) : unstore('language'); return location.reload() }
+    if (e.target.matches('[data-language]')) return changeLanguage(e.target.value)
     if (e.target.matches('[data-notify]')) return save('notify', e.target.checked)
     if (e.target.name === 'langFirst') return save('langFirst', e.target.value)
     if (e.target.name === 'player') return save('player', e.target.value)
@@ -934,7 +934,7 @@ const ICON = {
   folder: '<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z" class="fill"/></svg>',
   best: '<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>'
 }
-const RESOLUTIONS = [['2160', '2160p'], ['1080', '1080p'], ['720', '720p'], ['540', '540p'], ['480', '480p'], ['', t('Any')]]
+const RESOLUTIONS = [['2160', '2160p'], ['1080', '1080p'], ['720', '720p'], ['540', '540p'], ['480', '480p'], ['', 'Any']] // 'Any' is translated where it's shown
 const MANUAL = /^(magnet:\?|[0-9a-f]{40}$|https?:\/\/\S+\.torrent(\?|$))/i
 const seedClass = n => n >= 25 ? 'good' : n >= 5 ? 'ok' : 'bad'
 
@@ -1015,7 +1015,7 @@ function sources (m, startEpisode, opts = {}) {
         <input placeholder="${t('Filter by text, or paste a magnet link or torrent URL here to specify a torrent manually')}" aria-label="${t('Filter or paste a magnet link')}"></label>
       <div class="src-opts">
         <label>${t('Episode')} <input type="number" min="1" max="${total}" value="${episode}" class="src-ep"></label>
-        <label>${t('Resolution')} <select class="src-res">${RESOLUTIONS.map(([v, l]) => `<option value="${v}" ${load('resolution', '1080') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label>${t('Resolution')} <select class="src-res">${RESOLUTIONS.map(([v, l]) => `<option value="${v}" ${load('resolution', '1080') === v ? 'selected' : ''}>${v ? l : t(l)}</option>`).join('')}</select></label>
       </div>
       <button class="src-auto" disabled><span class="src-auto-label">${t('Searching…')}</span></button>
     </div>
@@ -1832,9 +1832,23 @@ function welcome () {
   }
   input.focus()
 }
-// the top bar and player controls are in index.html: their text and labels are translated once here
-for (const el of document.querySelectorAll('[data-t]')) el.textContent = t(el.textContent.trim())
-for (const attr of ['aria-label', 'title', 'placeholder']) for (const el of document.querySelectorAll(`[${attr}]`)) el.setAttribute(attr, t(el.getAttribute(attr)))
+// the top bar and player controls are in index.html: their English text and labels, kept so a language change can redo them
+const statics = [...document.querySelectorAll('[data-t]')].map(el => [el, null, el.textContent.trim()])
+  .concat(['aria-label', 'title', 'placeholder'].flatMap(attr => [...document.querySelectorAll(`[${attr}]`)].map(el => [el, attr, el.getAttribute(attr)])))
+const translateStatics = () => { for (const [el, attr, en] of statics) attr ? el.setAttribute(attr, t(en)) : (el.textContent = t(en)) }
+translateStatics()
+
+// Switches language in place, without reloading the page, so a Watch Together room and the episode playing carry on
+async function changeLanguage (code) {
+  code ? save('language', code) : unstore('language')
+  await setLanguage(pickLanguage(code || null, navigator.languages))
+  document.documentElement.lang = language()
+  window.native.setLanguage(language())
+  translateStatics()
+  drawRoom()
+  drawUpdate()
+  route()
+}
 if (firstLaunch) welcome()
 sync = createSync({ load, save, show: id => cache.get(id), native: window.native.anilist, onImported: route, ask })
 sync.start()
