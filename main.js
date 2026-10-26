@@ -210,13 +210,23 @@ async function dropCurrent (keep) {
 // Moving through a season pack keeps the torrent, and with it every episode watched so far. Its files stay open while
 // it runs (Windows can't delete them one by one), so past this much the torrent starts over with an empty cache.
 const PACK_CACHE_LIMIT = 3 * 1024 ** 3
+// The latest play request. In Watch Together the host can switch sources while a guest's first one is still loading;
+// that older request mustn't take over from the newer one when it finishes, or keep its torrent downloading.
+const latest = { n: 0, link: null }
 async function startPlay (link, episode, fileIndex, numbering, mpvMode) {
+  const n = ++latest.n
+  latest.link = link
   let existing = await client.get(link)
   if (existing && !downloads.owns(existing) && existing.files.reduce((sum, f) => sum + f.downloaded, 0) > PACK_CACHE_LIMIT) existing = null
   await dropCurrent(existing)
   if (browsing === existing) browsing = null
   else await dropBrowsing()
   const torrent = await loadTorrent(link)
+  if (n !== latest.n) {
+    const wanted = latest.link && await client.get(latest.link)
+    if (torrent !== wanted && torrent !== current?.torrent && !downloads.owns(torrent)) await client.remove(torrent, { destroyStore: true })
+    throw new Error('A newer source was picked')
+  }
   // checked on the file list alone, before anything downloads; a refused torrent is dropped
   const refuse = async message => { if (!downloads.owns(torrent)) await client.remove(torrent, { destroyStore: true }); throw new Error(message) }
   const risky = torrent.files.filter(f => RISKY.test(f.name)).map(f => f.name)
@@ -231,6 +241,8 @@ async function startPlay (link, episode, fileIndex, numbering, mpvMode) {
 ipcMain.handle('play-download', async (_, id, index, mpvMode) => {
   const file = downloads.local(id, index)
   if (!file) throw new Error(tk('This download is missing or not finished.'))
+  latest.n++
+  latest.link = null
   await dropCurrent()
   await dropBrowsing()
   return serve(file, null, `local/${id}/${index}`, mpvMode)

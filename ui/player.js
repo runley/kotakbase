@@ -45,6 +45,8 @@ export const LANG_DEFAULTS = { audioLangs: ['jpn'], subLangs: ['eng'] }
 export function langPrefs (key) {
   try { return JSON.parse(localStorage.getItem(key)) ?? LANG_DEFAULTS[key] } catch { return LANG_DEFAULTS[key] }
 }
+// an untagged subtitle track is English (Matroska's default, and what pickSubTrack assumes), not "Track 4"
+const subLabel = t => trackLabel(t.language ? t : { ...t, language: 'eng' })
 const trackLabel = t => [t.name || t.label, LANGS[langOf(t)] ? tr(LANGS[langOf(t)][0]) : t.language].filter(Boolean).join(' · ') || tr('Track {n}', { n: t.number ?? '' })
 
 // matroska stores each ASS line as "ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text", which libass takes directly.
@@ -86,7 +88,7 @@ async function selectTrack (n) {
 
 function renderSubMenu () {
   const s = state
-  const items = [[null, tr('Off')], ...Object.values(s.tracks).map(t => [t.number, trackLabel(t)])]
+  const items = [[null, tr('Off')], ...Object.values(s.tracks).map(t => [t.number, subLabel(t)])]
   $('p-subs').innerHTML = ''
   for (const [n, label] of items) {
     const b = document.createElement('button')
@@ -524,7 +526,7 @@ function openMenu (e) {
   cm.replaceChildren()
   buildMenu(cm, [
     [tr('Audio'), audio.length ? audio.map((t, i) => [trackLabel(t) || tr('Track {n}', { n: i + 1 }), t.enabled, () => audio.forEach((a, k) => { a.enabled = k === i })]) : [[tr('Default'), true]]],
-    [tr('Subtitles'), [[tr('Off'), s.active == null, () => selectTrack(null)], ...Object.values(s.tracks).map(t => [trackLabel(t), s.active === t.number, () => selectTrack(t.number)])]],
+    [tr('Subtitles'), [[tr('Off'), s.active == null, () => selectTrack(null)], ...Object.values(s.tracks).map(t => [subLabel(t), s.active === t.number, () => selectTrack(t.number)])]],
     [tr('Chapters'), s.chapters.length
       ? s.chapters.map(c => [`${fmtTime(c.start)}  ${c.title || tr('Chapter')}`, chapterAt(s, v.currentTime) === c, () => { v.currentTime = c.start }])
       : [[tr('No chapters'), false]]],
