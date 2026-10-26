@@ -824,12 +824,16 @@ function settingsPage () {
     <p class="muted">${t('Back up your progress, list, history, ratings, extensions and settings to a file, or restore them from one.')}</p>
     <div class="actions"><button class="btn ghost" data-export>${t('Export backup')}</button><button class="btn ghost" data-import>${t('Import backup')}</button><input type="file" accept=".json,application/json" hidden data-import-file></div>
     <div class="err" id="data-err"></div>
+    <h3>${t('Report a problem')}</h3>
+    <p class="muted">${t('Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.')}</p>
+    <div class="actions"><button class="btn ghost" data-diagnostics>${t('Copy diagnostics')}</button></div>
   </div>`
   sync.settings($app.querySelector('[data-anilist]'))
   drawUpdate()
   const update = (key, fn) => { const list = player.langPrefs(key); fn(list); save(key, list); settingsPage() }
   $app.onclick = e => {
     if (e.target.closest('[data-export]')) return exportData()
+    if (e.target.closest('[data-diagnostics]')) return copyDiagnostics()
     if (e.target.closest('[data-import]')) return $app.querySelector('[data-import-file]').click()
     const b = e.target.closest('button[data-key]')
     if (!b) return
@@ -1348,6 +1352,16 @@ async function startDownload (m, episode, r, mode) {
 }
 
 // a short message at the bottom of the window
+async function copyDiagnostics () {
+  try {
+    const text = await window.native.diagnostics([`Language: ${language()}`, `Player: ${load('player', 'builtin')}${hasMpv ? '' : ' (no mpv)'}`])
+    await navigator.clipboard.writeText(text)
+    notice(t('Diagnostics copied. Paste them into your bug report.'))
+  } catch (e) {
+    notice(t("Couldn't copy diagnostics: {error}", { error: e.message }))
+  }
+}
+
 function notice (text) {
   const el = document.createElement('div')
   el.className = 'notice'

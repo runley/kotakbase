@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('native', {
   },
   // Watch Together invite link the app was opened with (or arrives later as on('invite', code))
   takeInvite: () => ipcRenderer.invoke('take-invite'),
+  diagnostics: page => ipcRenderer.invoke('diagnostics', page),
   update: {
     state: () => ipcRenderer.invoke('update-state'),
     check: () => ipcRenderer.invoke('update-check'),

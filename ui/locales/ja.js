@@ -416,5 +416,10 @@ export default {
   "{n} to go": "残り{n}",
   "{n} watching": "{n}人が視聴中",
   "{shows} from AniList go into Kotakbase": "AniListの{shows}をKotakbaseに取り込みます",
-  "{shows} from Kotakbase go to your AniList list": "Kotakbaseの{shows}をAniListのリストに送ります"
+  "{shows} from Kotakbase go to your AniList list": "Kotakbaseの{shows}をAniListのリストに送ります",
+  "Report a problem": "問題を報告",
+  "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "アプリのバージョン、システム情報、最近のエラーをコピーします（ユーザー名とログイントークンは含まれません）。github.com/runley/kotakbase/issues のバグ報告に貼り付けてください。自動で送信されるものはありません。",
+  "Copy diagnostics": "診断情報をコピー",
+  "Diagnostics copied. Paste them into your bug report.": "診断情報をコピーしました。バグ報告に貼り付けてください。",
+  "Couldn't copy diagnostics: {error}": "診断情報をコピーできませんでした: {error}"
 }

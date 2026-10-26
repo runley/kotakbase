@@ -39,6 +39,8 @@
       "preload.cjs",
       "episode.js",
       "chapters.js",
+      "fonts.js",
+      "diagnostics.js",
       "mpv.js",
       "anilist-auth.js",
       "downloads.js",

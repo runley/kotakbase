@@ -9,15 +9,33 @@ import bencode from 'bencode'
 import { SubtitleStream } from 'matroska-subtitles'
 import { pickFile, findEpisode, VIDEO, RISKY } from './episode.js'
 import { readChapters } from './chapters.js'
+import { readFonts, isFont } from './fonts.js'
+import { createLog, redact } from './diagnostics.js'
 import { Mpv } from './mpv.js'
 import { setupAniList } from './anilist-auth.js'
 import { createDownloads } from './downloads.js'
 import { createDiscord } from './discord.js'
 import { t, setLanguage } from './ui/i18n.js'
-// messages sent to the page, which shows them in the user's language (tk marks them for the translation files)
-const tk = s => s
 import updater from 'electron-updater'
 const { autoUpdater } = updater
+// messages sent to the page, which shows them in the user's language (tk marks them for the translation files)
+const tk = s => s
+
+// recent warnings and errors from both processes, for Settings → Copy diagnostics (memory only)
+const problems = createLog()
+for (const level of ['warn', 'error']) {
+  const original = console[level].bind(console)
+  console[level] = (...args) => { problems.add(level, args); original(...args) }
+}
+ipcMain.handle('diagnostics', (_, page) => redact([
+  `Kotakbase ${app.getVersion()}${app.isPackaged ? '' : ' (from source)'}`,
+  `${os.type()} ${os.release()} ${os.arch()} (${os.version()})`,
+  `Electron ${process.versions.electron}, Chromium ${process.versions.chrome}`,
+  ...page,
+  '',
+  'Recent warnings and errors:',
+  ...(problems.lines().length ? problems.lines() : ['none'])
+].join('\n'), os.homedir()))
 
 const dir = import.meta.dirname
 
@@ -39,6 +57,7 @@ const isRemovedTorrentRequest = err => err instanceof TypeError && /reading 'get
 process.on('uncaughtException', err => {
   if (isClosedPeer(err)) return console.warn('WebRTC peer closed:', err.message)
   if (isRemovedTorrentRequest(err)) return console.warn('Piece request for a removed torrent ignored')
+  console.error('Uncaught:', err)
   dialog.showErrorBox('A JavaScript error occurred in the main process', `Uncaught Exception:\n${err?.stack ?? err}`)
 })
 // One running copy per profile, so two instances never fight over the download folder; a second launch focuses the first.
@@ -56,7 +75,8 @@ takeInvite(process.argv)
 ipcMain.handle('take-invite', () => { const c = invite; invite = null; return c })
 app.on('second-instance', (_, argv) => { showWindow(); if (takeInvite(argv)) send('invite', invite) })
 
-// Streams are throwaway: the previous torrent's files are deleted when another one starts, and the folder is wiped on start/quit.
+// Streams are throwaway: the previous torrent's files are deleted when another one starts (or a season pack's cache gets
+// past PACK_CACHE_LIMIT), and the folder is wiped on start/quit.
 const downloadPath = path.join(app.getPath('userData'), 'stream-cache')
 const wipeDownloads = () => {
   try { fs.rmSync(downloadPath, { recursive: true, force: true }) } catch (e) { console.warn('Could not fully clear stream cache:', e.message) }
@@ -123,13 +143,20 @@ const server = http.createServer((req, res) => {
   const subs = new SubtitleStream(current.subs)
   if (!current.subs) {
     subs.once('tracks', tracks => send('sub-tracks', tracks))
-    subs.on('file', f => /font|ttf|otf/i.test(f.mimetype + f.filename) && send('sub-font', f.data))
+    subs.on('file', f => isFont(f) && sendFont(current, f))
   }
   subs.on('subtitle', (sub, track) => send('sub', sub, track))
   subs.on('error', () => {})
   current.subs = subs
   stream.pipe(subs).pipe(res)
 }).listen(0, '127.0.0.1')
+
+// each font once per file: it comes from readFonts and, when it sits before the video data, from the stream too
+function sendFont (playing, f) {
+  if (current !== playing || playing.fonts.has(f.filename)) return
+  playing.fonts.add(f.filename)
+  send('sub-font', f.data)
+}
 
 function send (channel, ...args) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
@@ -180,8 +207,12 @@ async function dropCurrent (keep) {
   current = null
   if (t && t !== keep && !downloads.owns(t)) await client.remove(t, { destroyStore: true })
 }
+// Moving through a season pack keeps the torrent, and with it every episode watched so far. Its files stay open while
+// it runs (Windows can't delete them one by one), so past this much the torrent starts over with an empty cache.
+const PACK_CACHE_LIMIT = 3 * 1024 ** 3
 async function startPlay (link, episode, fileIndex, numbering, mpvMode) {
-  const existing = await client.get(link)
+  let existing = await client.get(link)
+  if (existing && !downloads.owns(existing) && existing.files.reduce((sum, f) => sum + f.downloaded, 0) > PACK_CACHE_LIMIT) existing = null
   await dropCurrent(existing)
   if (browsing === existing) browsing = null
   else await dropBrowsing()
@@ -206,11 +237,12 @@ ipcMain.handle('play-download', async (_, id, index, mpvMode) => {
 })
 function serve (file, torrent, key, mpvMode) {
   // a random token keeps a stale <video> request from a previous play from attaching to this one
-  current = { torrent, file, path: `/${key}/${Date.now()}`, mpv: mpvMode }
+  current = { torrent, file, path: `/${key}/${Date.now()}`, mpv: mpvMode, fonts: new Set() }
   // chapters sit in the MKV header before the video data, which is downloaded first anyway; [] for other formats
   const playing = current
   const chapters = /\.mkv$/i.test(file.name) ? readChapters(file.createReadStream({ start: 0, end: Math.min(file.length - 1, 32 * 1024 * 1024) })) : Promise.resolve([])
   chapters.then(list => { if (current === playing) send('chapters', list) })
+  if (/\.mkv$/i.test(file.name) && !mpvMode) readFonts(file).then(fonts => fonts.forEach(f => sendFont(playing, f))) // mpv loads them itself
   return { url: `http://127.0.0.1:${server.address().port}${current.path}`, name: file.name }
 }
 
@@ -395,6 +427,8 @@ app.whenReady().then(() => {
   const other = screen.getAllDisplays().filter(d => d.id !== screen.getPrimaryDisplay().id)[Number(process.env.KOTAKBASE_SCREEN) - 1]
   if (other) win.setBounds(other.workArea)
   win.loadFile(path.join(dir, 'ui', 'index.html'))
+  // the page's own warnings and errors (uncaught ones included) go to the diagnostics log too
+  win.webContents.on('console-message', e => { if (e.level === 'warning' || e.level === 'error') problems.add(e.level === 'warning' ? 'page warn' : 'page error', [`${e.message} (${String(e.sourceId).split('/').pop()}:${e.lineNumber})`]) })
   // With "hide to tray" (Settings, on by default) closing only hides the window, so a mis-click mid-episode loses nothing
   // and new-episode checks keep running; Quit is then in the tray menu
   win.on('close', e => {

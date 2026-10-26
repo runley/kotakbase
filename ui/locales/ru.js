@@ -416,5 +416,10 @@ export default {
   "{n} to go": { "one": "осталась {n}", "few": "осталось {n}", "many": "осталось {n}", "other": "осталось {n}" },
   "{n} watching": { "one": "{n} смотрит", "few": "{n} смотрят", "many": "{n} смотрят", "other": "{n} смотрят" },
   "{shows} from AniList go into Kotakbase": "{shows} из AniList переносятся в Kotakbase",
-  "{shows} from Kotakbase go to your AniList list": "{shows} из Kotakbase переносятся в ваш список AniList"
+  "{shows} from Kotakbase go to your AniList list": "{shows} из Kotakbase переносятся в ваш список AniList",
+  "Report a problem": "Сообщить о проблеме",
+  "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Копирует версию приложения, сведения о системе и последние ошибки, без вашего имени пользователя и токенов входа. Вставьте это в отчёт об ошибке на github.com/runley/kotakbase/issues. Ничего не отправляется автоматически.",
+  "Copy diagnostics": "Скопировать диагностику",
+  "Diagnostics copied. Paste them into your bug report.": "Диагностика скопирована. Вставьте её в отчёт об ошибке.",
+  "Couldn't copy diagnostics: {error}": "Не удалось скопировать диагностику: {error}"
 }

@@ -416,5 +416,10 @@ export default {
   "{n} to go": "Faltan {n}",
   "{n} watching": "{n} viendo",
   "{shows} from AniList go into Kotakbase": "{shows} de AniList pasan a Kotakbase",
-  "{shows} from Kotakbase go to your AniList list": "{shows} de Kotakbase pasan a tu lista de AniList"
+  "{shows} from Kotakbase go to your AniList list": "{shows} de Kotakbase pasan a tu lista de AniList",
+  "Report a problem": "Informar de un problema",
+  "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Copia la versión de la app, el sistema y los errores recientes, sin tu nombre de usuario ni tus tokens de inicio de sesión. Pégalo en un informe de error en github.com/runley/kotakbase/issues. No se envía nada automáticamente.",
+  "Copy diagnostics": "Copiar diagnóstico",
+  "Diagnostics copied. Paste them into your bug report.": "Diagnóstico copiado. Pégalo en tu informe de error.",
+  "Couldn't copy diagnostics: {error}": "No se pudo copiar el diagnóstico: {error}"
 }

@@ -416,5 +416,10 @@ export default {
   "{n} to go": "{n} қалды",
   "{n} watching": "{n} көріп отыр",
   "{shows} from AniList go into Kotakbase": "AniList-тегі {shows} Kotakbase-ке көшіріледі",
-  "{shows} from Kotakbase go to your AniList list": "Kotakbase-тегі {shows} AniList тізіміңізге жіберіледі"
+  "{shows} from Kotakbase go to your AniList list": "Kotakbase-тегі {shows} AniList тізіміңізге жіберіледі",
+  "Report a problem": "Мәселе туралы хабарлау",
+  "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Қолданба нұсқасын, жүйе туралы мәліметті және соңғы қателерді көшіреді, пайдаланушы атыңыз бен кіру токендері алынып тасталады. Оны github.com/runley/kotakbase/issues сайтындағы қате туралы есепке қойыңыз. Ештеңе автоматты түрде жіберілмейді.",
+  "Copy diagnostics": "Диагностиканы көшіру",
+  "Diagnostics copied. Paste them into your bug report.": "Диагностика көшірілді. Оны қате туралы есепке қойыңыз.",
+  "Couldn't copy diagnostics: {error}": "Диагностиканы көшіру мүмкін болмады: {error}"
 }

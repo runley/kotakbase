@@ -466,5 +466,10 @@ export default {
     "other": "{n} дивляться"
   },
   "{shows} from AniList go into Kotakbase": "З AniList у Kotakbase: {shows}",
-  "{shows} from Kotakbase go to your AniList list": "З Kotakbase у ваш список AniList: {shows}"
+  "{shows} from Kotakbase go to your AniList list": "З Kotakbase у ваш список AniList: {shows}",
+  "Report a problem": "Повідомити про проблему",
+  "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Копіює версію застосунку, дані про систему та останні помилки, без вашого імені користувача й токенів входу. Вставте це у звіт про помилку на github.com/runley/kotakbase/issues. Нічого не надсилається автоматично.",
+  "Copy diagnostics": "Скопіювати діагностику",
+  "Diagnostics copied. Paste them into your bug report.": "Діагностику скопійовано. Вставте її у звіт про помилку.",
+  "Couldn't copy diagnostics: {error}": "Не вдалося скопіювати діагностику: {error}"
 }

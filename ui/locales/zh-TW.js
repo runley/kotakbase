@@ -416,5 +416,10 @@ export default {
   "{n} to go": "還剩 {n} 集",
   "{n} watching": "{n} 人正在看",
   "{shows} from AniList go into Kotakbase": "AniList 的 {shows} 將匯入 Kotakbase",
-  "{shows} from Kotakbase go to your AniList list": "Kotakbase 的 {shows} 將加入你的 AniList 清單"
+  "{shows} from Kotakbase go to your AniList list": "Kotakbase 的 {shows} 將加入你的 AniList 清單",
+  "Report a problem": "回報問題",
+  "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "複製應用程式版本、系統資訊和最近的錯誤，不包含你的使用者名稱和登入權杖。請將其貼到 github.com/runley/kotakbase/issues 的錯誤回報中。不會自動傳送任何內容。",
+  "Copy diagnostics": "複製診斷資訊",
+  "Diagnostics copied. Paste them into your bug report.": "診斷資訊已複製。請貼到你的錯誤回報中。",
+  "Couldn't copy diagnostics: {error}": "無法複製診斷資訊：{error}"
 }
