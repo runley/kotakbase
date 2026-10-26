@@ -12,3 +12,4 @@ A Windows desktop app for streaming anime from torrents, with AniList sync, Watc
 
 - [Terms of Service](terms)
 - [Privacy Policy](privacy)
+- [Code Signing Policy](code-signing)

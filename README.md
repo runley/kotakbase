@@ -50,4 +50,4 @@ Kotakbase is a player. It doesn't host, store, index or link to any video, and t
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Also see the [Terms of Service](docs/terms.md) and [Privacy Policy](docs/privacy.md). Third-party software Kotakbase ships is listed in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and [licenses/](licenses).
+MIT, see [LICENSE](LICENSE). Also see the [Terms of Service](docs/terms.md), [Privacy Policy](docs/privacy.md) and [Code Signing Policy](docs/code-signing.md). Third-party software Kotakbase ships is listed in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) and [licenses/](licenses).
