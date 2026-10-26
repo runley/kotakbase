@@ -176,12 +176,13 @@ export async function play (opts) {
   close(false, false, useMpv)
   const video = useMpv ? new MpvVideo() : document.createElement('video')
   const s = state = { opts, video, mpv: useMpv, tracks: {}, cues: {}, fonts: [], order: new Map(), active: null, jassub: null, off: [], fileChapters: null, chapters: [], end: null }
-  if (!useMpv) {
-    // some releases' headers overstate the length (47:16 for a 23:38 episode); the main process reads where the video
-    // really ends (s.end), and everything that asks for the duration (time bar, progress, next episode, room) gets that
-    const native = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'duration').get
-    Object.defineProperty(video, 'duration', { get () { const d = native.call(this); return s.end && d - s.end > 60 ? s.end : d } })
-  }
+  // Some releases' headers overstate the length (47:16 for a 23:38 episode), and both <video> and mpv believe them. The
+  // main process reads where the video really ends (s.end); everything that asks for the duration (time bar, progress,
+  // next episode, room) gets that. mpv's value is a plain field MpvVideo sets, kept here.
+  const nativeDuration = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'duration').get
+  let mpvDuration = NaN
+  const stated = () => useMpv ? mpvDuration : nativeDuration.call(video)
+  Object.defineProperty(video, 'duration', { get: () => { const d = stated(); return s.end && d - s.end > 60 ? s.end : d }, set: v => { mpvDuration = v } })
   $player.hidden = false
   pushPlayerEntry()
   $('player-video').replaceChildren(...(useMpv ? [] : [video]))

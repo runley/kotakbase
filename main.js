@@ -254,8 +254,8 @@ function serve (file, torrent, key, mpvMode) {
   const playing = current
   const chapters = /\.mkv$/i.test(file.name) ? readChapters(file.createReadStream({ start: 0, end: Math.min(file.length - 1, 32 * 1024 * 1024) })) : Promise.resolve([])
   chapters.then(list => { if (current === playing) send('chapters', list) })
-  if (/\.mkv$/i.test(file.name) && !mpvMode) {
-    readFonts(file).then(fonts => fonts.forEach(f => sendFont(playing, f))) // mpv loads them itself
+  if (/\.mkv$/i.test(file.name)) {
+    if (!mpvMode) readFonts(file).then(fonts => fonts.forEach(f => sendFont(playing, f))) // mpv loads them itself
     readEnd(file).then(end => { if (end && current === playing) send('file-end', end) }) // the header's length can be wrong
   }
   return { url: `http://127.0.0.1:${server.address().port}${current.path}`, name: file.name }
