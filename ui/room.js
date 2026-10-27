@@ -70,6 +70,8 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
   let ignoreUntil = 0 // changes we made ourselves to follow the host
   let lastSent = 0
   let autoPaused = false
+  // the player here has matched the host since it opened: until then its own autoplay isn't someone pressing play
+  let followed = false
   let myStatus = ''
   let closed = false
   let problem = ''
@@ -141,14 +143,17 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
     if (m.t === 'state' && from === host && !isHost()) {
       if (loadKey(m.load) !== loadKey(load)) {
         load = m.load
+        followed = false
         changed()
         if (load) onLoad(load)
         return
       }
       const p = playerNow()
       if (!p || !load) return
-      if (mine(p.video, Date.now())) return tellHost(p.video) // paused or sought here just now: that wins
+      if (followed && mine(p.video, Date.now())) return tellHost(p.video) // paused or sought here just now: that wins
+      if (m.paused) p.video.autoplay = false // still loading here, it would start by itself once loaded
       apply(p, syncPlan(m, { time: p.video.currentTime, paused: p.video.paused }), p.video.currentTime)
+      followed = true
     }
   }
 
@@ -167,7 +172,7 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
     const now = Date.now()
     if (p) {
       const { video } = p
-      const changedHere = mine(video, now)
+      const changedHere = mine(video, now) && (isHost() || followed)
       if (isHost()) {
         if (changedHere || now - lastSent > 1000) sendState()
         // wait for anyone still loading this episode, then carry on
@@ -177,7 +182,7 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
         if (changedHere && video.paused) autoPaused = false // paused by hand: stays paused
       } else if (changedHere) return tellHost(video)
       last = { time: video.currentTime, paused: video.paused, wall: now, rate: video.playbackRate }
-    } else last = null
+    } else { last = null; followed = false }
     // still loading the torrent or buffering counts as not ready; with the player closed, nobody waits for us
     const open = getPlayer()
     const buffering = !!open && (!p || open.buffering)
