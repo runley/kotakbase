@@ -421,5 +421,20 @@ export default {
   "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "複製應用程式版本、系統資訊和最近的錯誤，不包含你的使用者名稱和登入權杖。請將其貼到 github.com/runley/kotakbase/issues 的錯誤回報中。不會自動傳送任何內容。",
   "Copy diagnostics": "複製診斷資訊",
   "Diagnostics copied. Paste them into your bug report.": "診斷資訊已複製。請貼到你的錯誤回報中。",
-  "Couldn't copy diagnostics: {error}": "無法複製診斷資訊：{error}"
+  "Couldn't copy diagnostics: {error}": "無法複製診斷資訊：{error}",
+  "Saved rooms": "已儲存的房間",
+  "New saved room": "新增儲存的房間",
+  "A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.": "一個你和朋友可以隨時回來的房間。知道房間代碼和 PIN 的人都能加入，最先在房間裡的人擔任房主。",
+  "Room name": "房間名稱",
+  "PIN": "PIN",
+  "PIN (4 to 8 digits)": "PIN（4 到 8 位數字）",
+  "PIN, for saved rooms": "已儲存房間的 PIN",
+  "Joining a saved room? Add its PIN and it stays below.": "要加入已儲存的房間？填上它的 PIN，它就會儲存在下方。",
+  "PIN: {pin}": "PIN：{pin}",
+  "A saved room: share the code and the PIN. Whoever is in it first is the host.": "這是已儲存的房間：請分享房間代碼和 PIN。最先在房間裡的人擔任房主。",
+  "Delete this room?": "刪除這個房間？",
+  "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} 將從此裝置中移除。其他儲存了它的人仍會保留，你也可以用房間代碼和 PIN 再次加入。",
+  "Give the room a name.": "請為房間取個名字。",
+  "The PIN is 4 to 8 digits.": "PIN 為 4 到 8 位數字。",
+  "Expected others here? Check the code and PIN.": "以為這裡會有其他人？請檢查房間代碼和 PIN。"
 }

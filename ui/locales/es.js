@@ -421,5 +421,20 @@ export default {
   "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Copia la versión de la app, el sistema y los errores recientes, sin tu nombre de usuario ni tus tokens de inicio de sesión. Pégalo en un informe de error en github.com/runley/kotakbase/issues. No se envía nada automáticamente.",
   "Copy diagnostics": "Copiar diagnóstico",
   "Diagnostics copied. Paste them into your bug report.": "Diagnóstico copiado. Pégalo en tu informe de error.",
-  "Couldn't copy diagnostics: {error}": "No se pudo copiar el diagnóstico: {error}"
+  "Couldn't copy diagnostics: {error}": "No se pudo copiar el diagnóstico: {error}",
+  "Saved rooms": "Salas guardadas",
+  "New saved room": "Nueva sala guardada",
+  "A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.": "Una sala a la que tú y tus amigos podéis volver. Cualquiera con su código y PIN puede unirse, y quien esté primero es el anfitrión.",
+  "Room name": "Nombre de la sala",
+  "PIN": "PIN",
+  "PIN (4 to 8 digits)": "PIN (de 4 a 8 dígitos)",
+  "PIN, for saved rooms": "PIN, para salas guardadas",
+  "Joining a saved room? Add its PIN and it stays below.": "¿Te unes a una sala guardada? Añade su PIN y se quedará abajo.",
+  "PIN: {pin}": "PIN: {pin}",
+  "A saved room: share the code and the PIN. Whoever is in it first is the host.": "Una sala guardada: comparte el código y el PIN. Quien esté primero es el anfitrión.",
+  "Delete this room?": "¿Eliminar esta sala?",
+  "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} se elimina de este dispositivo. Quienes la guardaron la conservan, y puedes volver a unirte con su código y PIN.",
+  "Give the room a name.": "Ponle un nombre a la sala.",
+  "The PIN is 4 to 8 digits.": "El PIN tiene de 4 a 8 dígitos.",
+  "Expected others here? Check the code and PIN.": "¿Esperabas a otros aquí? Revisa el código y el PIN."
 }

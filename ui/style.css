@@ -415,6 +415,12 @@ body.navigating::after { content: ''; position: fixed; top: 0; left: 0; width: 3
 .together [data-join] input { letter-spacing: 1px; text-transform: uppercase; }
 .room-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .room-head .actions { margin: 0; }
+.together .add input { min-width: 0; }
+.together .add .pin { flex: 0 0 84px; letter-spacing: 1px; }
+.together .saved-new { flex-wrap: wrap; }
+.saved-head { margin: 32px 0 12px; }
+.saved-room h3 { overflow-wrap: anywhere; }
+.room-pin { display: block; margin-top: 4px; }
 .room-code { display: block; margin-top: 8px; font: 800 28px var(--display); letter-spacing: 2px; }
 .people { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .people li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--panel); border-radius: 14px; }

@@ -4,7 +4,7 @@ import { parseRelease, releaseTags, audioLanguages, subLanguages, rankByLanguage
 import { LANGS, SIGNS } from './lang.js'
 import { fromMal, malAnime } from './mal.js'
 import { createSync } from './anilist-sync.js'
-import { openRoom, parseCode, formatCode, inviteLink } from './room.js'
+import { openRoom, parseCode, formatCode, inviteLink, newCode, validPin } from './room.js'
 import { t, setLanguage, pickLanguage, language, LANGUAGES } from './i18n.js'
 
 
@@ -1458,14 +1458,25 @@ let room = null // the room you're in, if any
 let roomError = ''
 const roomName = () => load('roomName', '') || `${t('Guest')} ${Math.floor(100 + Math.random() * 900)}`
 
-async function enterRoom (code) {
+// Saved rooms: a code and PIN kept on this device, newest first, so you can go back in without an invite
+const savedRooms = () => load('savedRooms', [])
+const saveRoom = r => save('savedRooms', [r, ...savedRooms().filter(x => x.code !== r.code)])
+const roomTitle = r => r.name || formatCode(r.code)
+
+// saved: { code, pin, name } for a saved room
+async function enterRoom (code, saved = null) {
   if (room) return
   const name = roomName()
   save('roomName', name)
   roomError = ''
+  // joined with a code and PIN: kept once someone there tells us its name, so a mistyped PIN isn't kept
+  if (saved?.name) saveRoom(saved)
   try {
     room = await openRoom({
       code: code ?? undefined,
+      pin: saved?.pin,
+      title: saved?.name || null,
+      onTitle: n => saveRoom({ code, pin: saved.pin, name: n }),
       name,
       getPlayer: player.current,
       onChange: drawRoom,
@@ -1473,7 +1484,7 @@ async function enterRoom (code) {
       // others' messages pop up over the video too
       onChat: msg => { if (!msg.mine && player.current()) player.roomMessage(msg.name, msg.text) }
     })
-    if (!code) room.claim()
+    if (!code && !saved) room.claim()
   } catch (e) {
     roomError = t("Couldn't start Watch Together: {error}", { error: e.message })
   }
@@ -1505,7 +1516,7 @@ async function joinInvite (text) {
   if (room?.code === code) return
   if (room && !await ask(t('Join another room?'), `<p>${t("You're in room {current}. Leave it and join {next}?", { current: esc(formatCode(room.code)), next: esc(formatCode(code)) })}</p>`, t('Join'), t('Stay'))) return
   leaveRoom()
-  enterRoom(code)
+  enterRoom(code, savedRooms().find(r => r.code === code)) // a saved room's code: with its PIN
 }
 window.native.takeInvite().then(joinInvite)
 window.native.on('invite', () => window.native.takeInvite().then(joinInvite))
@@ -1533,7 +1544,15 @@ function togetherPage () {
       <div class="together-boxes">
         <section class="box"><h3>${t('Start a room')}</h3><p class="muted">${t("You'll be the host. Share the invite link or the room code with your friends.")}</p><button class="btn" data-create>${t('Create room')}</button></section>
         <section class="box"><h3>${t('Join a room')}</h3><p class="muted">${t('Open the invite link someone shared, or enter their room code.')}</p>
-          <form class="add" data-join><input data-field="code" placeholder="XXXX-XXXX-XXXX" aria-label="${t('Room code')}" maxlength="40" autocomplete="off" spellcheck="false"><button class="btn">${t('Join')}</button></form></section>
+          <form class="add" data-join><input data-field="code" placeholder="XXXX-XXXX-XXXX" aria-label="${t('Room code')}" maxlength="40" autocomplete="off" spellcheck="false"><input data-field="pin" class="pin" placeholder="${t('PIN')}" aria-label="${t('PIN, for saved rooms')}" inputmode="numeric" maxlength="8" autocomplete="off"><button class="btn">${t('Join')}</button></form>
+          <p class="muted">${t('Joining a saved room? Add its PIN and it stays below.')}</p></section>
+      </div>
+      <h3 class="saved-head">${t('Saved rooms')}</h3>
+      <div class="together-boxes">
+        <section class="box"><h3>${t('New saved room')}</h3><p class="muted">${t('A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.')}</p>
+          <form class="add saved-new" data-saved><input data-field="room" placeholder="${t('Room name')}" aria-label="${t('Room name')}" maxlength="40" autocomplete="off"><input data-field="newpin" class="pin" placeholder="${t('PIN')}" aria-label="${t('PIN (4 to 8 digits)')}" inputmode="numeric" maxlength="8" autocomplete="off"><button class="btn">${t('Create room')}</button></form></section>
+        ${savedRooms().map(r => `<section class="box saved-room"><h3>${esc(roomTitle(r))}</h3><p class="muted">${t('Room code')}: ${esc(formatCode(r.code))}</p>
+          <div class="actions"><button class="btn" data-enter="${esc(r.code)}">${t('Join')}</button><button class="btn ghost" data-forget="${esc(r.code)}">${t('Delete')}</button></div></section>`).join('')}
       </div>
       <p class="err">${esc(roomError)}</p></div>`
   } else {
@@ -1545,9 +1564,10 @@ function togetherPage () {
     const chat = room.chat()
     $app.innerHTML = `<div class="page together"><h2>${t('Watch Together')}</h2>
       <section class="box room-head">
-        <div><span class="kicker">${t('Room code')}</span><b class="room-code">${esc(formatCode(room.code))}</b></div>
-        <div class="actions"><button class="btn" data-copy="link">${t('Copy invite link')}</button><button class="btn ghost" data-copy="code">${t('Copy code')}</button><button class="btn ghost" data-leave>${t('Leave room')}</button></div>
+        <div><span class="kicker">${room.pin ? esc(roomTitle(savedRooms().find(r => r.code === room.code) ?? { code: room.code })) + ' · ' + t('Room code') : t('Room code')}</span><b class="room-code">${esc(formatCode(room.code))}</b>${room.pin ? `<span class="muted room-pin">${t('PIN: {pin}', { pin: esc(room.pin) })}</span>` : ''}</div>
+        <div class="actions">${room.pin ? '' : `<button class="btn" data-copy="link">${t('Copy invite link')}</button>`}<button class="btn ghost" data-copy="code">${t('Copy code')}</button><button class="btn ghost" data-leave>${t('Leave room')}</button></div>
       </section>
+      ${room.pin ? `<p class="muted">${t('A saved room: share the code and the PIN. Whoever is in it first is the host.')}${n ? '' : ' ' + t('Expected others here? Check the code and PIN.')}</p>` : ''}
       <p class="muted">${n ? t('{n} people in the room', { n: n + 1 }) + '.' : room.net.trackers ? t('Waiting for others to join…') : t('Connecting…')}${room.isHost() ? ' ' + t("You're the host: pick a show and episode as usual, and everyone here watches it with you.") : ''}</p>
       <div class="room-grid">
         <div>
@@ -1577,6 +1597,14 @@ function togetherPage () {
   if (focused) $app.querySelector(`[data-field="${focused}"]`)?.focus()
   $app.onclick = e => {
     if (e.target.closest('[data-create]')) return enterRoom(null)
+    const enter = e.target.closest('[data-enter]')
+    if (enter) { const r = savedRooms().find(x => x.code === enter.dataset.enter); return r && enterRoom(r.code, r) }
+    const forget = e.target.closest('[data-forget]')
+    if (forget) {
+      const r = savedRooms().find(x => x.code === forget.dataset.forget)
+      return r && ask(t('Delete this room?'), `<p>${t('{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.', { name: esc(roomTitle(r)) })}</p>`, t('Delete'), t('Cancel'))
+        .then(yes => { if (yes) { save('savedRooms', savedRooms().filter(x => x.code !== r.code)); togetherPage() } })
+    }
     if (e.target.closest('[data-leave]')) return leaveRoom()
     const copy = e.target.closest('[data-copy]')
     if (copy) {
@@ -1604,9 +1632,20 @@ function togetherPage () {
       input.value = '' // before saying it: saying redraws the page, which keeps what's typed
       return room?.say(text)
     }
+    if (e.target.matches('[data-saved]')) {
+      const name = $app.querySelector('[data-field="room"]').value.trim().slice(0, 40)
+      const pin = $app.querySelector('[data-field="newpin"]').value.trim()
+      if (!name) { roomError = t('Give the room a name.'); return togetherPage() }
+      if (!validPin(pin)) { roomError = t('The PIN is 4 to 8 digits.'); return togetherPage() }
+      const code = newCode()
+      return enterRoom(code, { code, pin, name })
+    }
     const code = parseCode($app.querySelector('[data-field="code"]').value)
     if (!code) { roomError = t("That isn't a room code. It looks like XXXX-XXXX-XXXX."); return togetherPage() }
-    enterRoom(code)
+    const pin = $app.querySelector('[data-field="pin"]').value.trim()
+    if (pin && !validPin(pin)) { roomError = t('The PIN is 4 to 8 digits.'); return togetherPage() }
+    const known = savedRooms().find(r => r.code === code)
+    enterRoom(code, pin ? { code, pin, name: known?.pin === pin ? known.name : null } : null)
   }
 }
 

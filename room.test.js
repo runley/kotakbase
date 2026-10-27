@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { newCode, formatCode, parseCode, inviteLink, valid, validLoad, syncPlan, electHost, loadKey } from './ui/room.js'
+import { newCode, formatCode, parseCode, inviteLink, valid, validLoad, syncPlan, electHost, loadKey, validPin } from './ui/room.js'
 
 test('room codes: 12 unambiguous characters, typed back in any format', () => {
   const code = newCode()
@@ -65,4 +65,12 @@ test('loadKey: same episode and file means the same thing playing', () => {
   assert.equal(loadKey(l), loadKey({ ...l, title: 'other', numbering: {} }))
   assert.notEqual(loadKey(l), loadKey({ ...l, fileIndex: 3 }))
   assert.equal(loadKey(null), '')
+})
+
+test('saved rooms: a 4 to 8 digit PIN, and a room name in hello', () => {
+  assert.ok(validPin('1234') && validPin('12345678'))
+  assert.ok(!validPin('123') && !validPin('123456789') && !validPin('12a4') && !validPin(''))
+  assert.ok(valid({ t: 'hello', name: 'Ann', since: 1, host: null, room: 'Friday anime' }))
+  assert.ok(!valid({ t: 'hello', name: 'Ann', since: 1, room: 'x'.repeat(41) }))
+  assert.ok(!valid({ t: 'hello', name: 'Ann', since: 1, room: 5 }))
 })

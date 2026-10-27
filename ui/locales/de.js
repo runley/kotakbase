@@ -421,5 +421,20 @@ export default {
   "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Kopiert App-Version, System und letzte Fehler, ohne deinen Benutzernamen und deine Anmelde-Token. Füge es in einen Fehlerbericht auf github.com/runley/kotakbase/issues ein. Es wird nichts automatisch gesendet.",
   "Copy diagnostics": "Diagnose kopieren",
   "Diagnostics copied. Paste them into your bug report.": "Diagnose kopiert. Füge sie in deinen Fehlerbericht ein.",
-  "Couldn't copy diagnostics: {error}": "Diagnose konnte nicht kopiert werden: {error}"
+  "Couldn't copy diagnostics: {error}": "Diagnose konnte nicht kopiert werden: {error}",
+  "Saved rooms": "Gespeicherte Räume",
+  "New saved room": "Neuer gespeicherter Raum",
+  "A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.": "Ein Raum, zu dem du und deine Freunde zurückkehren könnt. Wer Code und PIN kennt, kann beitreten, und wer zuerst drin ist, ist Host.",
+  "Room name": "Raumname",
+  "PIN": "PIN",
+  "PIN (4 to 8 digits)": "PIN (4 bis 8 Ziffern)",
+  "PIN, for saved rooms": "PIN für gespeicherte Räume",
+  "Joining a saved room? Add its PIN and it stays below.": "Trittst du einem gespeicherten Raum bei? Gib seine PIN ein, dann bleibt er unten gespeichert.",
+  "PIN: {pin}": "PIN: {pin}",
+  "A saved room: share the code and the PIN. Whoever is in it first is the host.": "Ein gespeicherter Raum: Teile den Code und die PIN. Wer zuerst drin ist, ist Host.",
+  "Delete this room?": "Diesen Raum löschen?",
+  "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} wird von diesem Gerät entfernt. Andere, die ihn gespeichert haben, behalten ihn, und du kannst mit Code und PIN wieder beitreten.",
+  "Give the room a name.": "Gib dem Raum einen Namen.",
+  "The PIN is 4 to 8 digits.": "Die PIN hat 4 bis 8 Ziffern.",
+  "Expected others here? Check the code and PIN.": "Hier andere erwartet? Prüfe Code und PIN."
 }

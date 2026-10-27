@@ -471,5 +471,20 @@ export default {
   "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Копіює версію застосунку, дані про систему та останні помилки, без вашого імені користувача й токенів входу. Вставте це у звіт про помилку на github.com/runley/kotakbase/issues. Нічого не надсилається автоматично.",
   "Copy diagnostics": "Скопіювати діагностику",
   "Diagnostics copied. Paste them into your bug report.": "Діагностику скопійовано. Вставте її у звіт про помилку.",
-  "Couldn't copy diagnostics: {error}": "Не вдалося скопіювати діагностику: {error}"
+  "Couldn't copy diagnostics: {error}": "Не вдалося скопіювати діагностику: {error}",
+  "Saved rooms": "Збережені кімнати",
+  "New saved room": "Нова збережена кімната",
+  "A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.": "Кімната, до якої ви з друзями можете повертатися. Увійти може будь-хто, хто знає її код і PIN, а ведучим стає той, хто зайшов першим.",
+  "Room name": "Назва кімнати",
+  "PIN": "PIN",
+  "PIN (4 to 8 digits)": "PIN (від 4 до 8 цифр)",
+  "PIN, for saved rooms": "PIN для збережених кімнат",
+  "Joining a saved room? Add its PIN and it stays below.": "Входите до збереженої кімнати? Додайте її PIN, і вона залишиться нижче.",
+  "PIN: {pin}": "PIN: {pin}",
+  "A saved room: share the code and the PIN. Whoever is in it first is the host.": "Збережена кімната: поділіться кодом і PIN. Ведучий — той, хто зайшов першим.",
+  "Delete this room?": "Видалити цю кімнату?",
+  "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} видаляється з цього пристрою. В інших, хто її зберіг, вона залишиться, а ви зможете знову увійти за кодом і PIN.",
+  "Give the room a name.": "Дайте кімнаті назву.",
+  "The PIN is 4 to 8 digits.": "PIN — це від 4 до 8 цифр.",
+  "Expected others here? Check the code and PIN.": "Чекали тут інших? Перевірте код і PIN."
 }

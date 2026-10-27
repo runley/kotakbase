@@ -10,6 +10,7 @@ export const formatCode = code => code.match(/.{1,4}/g).join('-')
 // a code typed in any format, or the end of an invite link (…/join#CODE or kotakbase://join/CODE)
 export const parseCode = text => { const c = String(text).trim().split(/[#/]/).pop().toUpperCase().replace(/[^A-Z0-9]/g, ''); return /^[A-HJ-NP-Z2-9]{12}$/.test(c) ? c : null }
 export const inviteLink = code => `https://runley.github.io/kotakbase/join#${formatCode(code)}`
+export const validPin = pin => /^\d{4,8}$/.test(pin)
 
 // ---- messages from other members are untrusted: anything malformed is dropped ----
 const str = (v, max) => typeof v === 'string' && v.length <= max
@@ -28,7 +29,7 @@ export function validLoad (l) {
 export function valid (m) {
   if (!m || typeof m !== 'object') return false
   switch (m.t) {
-    case 'hello': return str(m.name, 40) && Number.isSafeInteger(m.since) && m.since > 0 && (m.host == null || str(m.host, 40))
+    case 'hello': return str(m.name, 40) && Number.isSafeInteger(m.since) && m.since > 0 && (m.host == null || str(m.host, 40)) && (m.room == null || str(m.room, 40))
     case 'state': return typeof m.paused === 'boolean' && num(m.time) && (m.load == null || validLoad(m.load))
     case 'control': return typeof m.paused === 'boolean' && num(m.time)
     case 'host': return str(m.id, 40)
@@ -56,8 +57,10 @@ export const loadKey = l => l ? JSON.stringify([l.mediaId, l.episode, l.link, l.
 /**
  * Creates (no code) or joins a room. getPlayer() → { video, buffering } | null for what's playing here;
  * onLoad(load) plays what the host picked; onChange() redraws.
+ * A saved room has a PIN (only those who know it meet there), a title it tells others, and no fixed host: whoever is
+ * there first hosts it.
  */
-export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onChange, onChat = () => {} }) {
+export async function openRoom ({ code = newCode(), pin = null, title = null, name, getPlayer, onLoad, onChange, onChat = () => {}, onTitle = () => {} }) {
   const me = { id: null, name, since: Date.now() }
   const members = new Map() // id -> { id, name, since, channel, buffering, key }
   let host = null
@@ -119,7 +122,10 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
     }
     if (m.t === 'hello') {
       Object.assign(peer, { name: m.name, since: m.since, known: true })
+      if (m.room && pin && !title) { title = m.room; onTitle(title) } // joined with just the code and PIN: learn its name
       if (!host && m.host) setHost(m.host) // just joined: learn who the host is
+      // two people walked into an empty saved room at once and both took it: everyone settles on the same one
+      else if (pin && m.host && host && m.host !== host) setHost(electHost([me, ...[...members.values()].filter(p => p.known)]))
       return changed()
     }
     if (m.t === 'host' && from === host) return setHost(m.id)
@@ -179,7 +185,8 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
     if (status !== myStatus && !isHost()) { myStatus = status; broadcast({ t: 'status', buffering, key: open ? loadKey(load) : null }) }
   }
 
-  const connection = await joinRoom(code, {
+  const hello = () => ({ t: 'hello', name: me.name, since: me.since, host, room: pin ? title : null })
+  const connection = await joinRoom(pin ? `${code}:${pin}` : code, {
     onOpen (id, channel) {
       const peer = { id, name: tr('Connecting…'), since: Infinity, channel, buffering: false, key: null, known: false }
       members.set(id, peer)
@@ -189,7 +196,7 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
         try { m = JSON.parse(e.data) } catch { return }
         onMessage(id, m)
       }
-      send(channel, { t: 'hello', name: me.name, since: me.since, host })
+      send(channel, hello())
       if (isHost()) send(channel, stateMsg())
       myStatus = '' // tell the newcomer too
       changed()
@@ -203,9 +210,12 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
   })
   me.id = connection.id
   const timer = setInterval(tick, 250)
+  // a saved room with nobody in it after a while: this device hosts it (with others there, their hello said who does)
+  const claimTimer = pin && setTimeout(() => { if (!host && !closed) setHost(electHost([me, ...[...members.values()].filter(p => p.known)])) }, 8000)
 
   return {
     code,
+    pin,
     me,
     get host () { return host },
     get load () { return load },
@@ -230,10 +240,11 @@ export async function openRoom ({ code = newCode(), name, getPlayer, onLoad, onC
       broadcast({ t: 'chat', text })
       addChat(me.name, text, true)
     },
-    rename (n) { me.name = n; broadcast({ t: 'hello', name: n, since: me.since, host }); changed() },
+    rename (n) { me.name = n; broadcast(hello()); changed() },
     leave () {
       closed = true
       clearInterval(timer)
+      clearTimeout(claimTimer)
       connection.leave()
       const p = getPlayer()
       if (p && p.video.playbackRate !== 1) p.video.playbackRate = 1

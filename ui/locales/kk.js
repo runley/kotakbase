@@ -421,5 +421,20 @@ export default {
   "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Қолданба нұсқасын, жүйе туралы мәліметті және соңғы қателерді көшіреді, пайдаланушы атыңыз бен кіру токендері алынып тасталады. Оны github.com/runley/kotakbase/issues сайтындағы қате туралы есепке қойыңыз. Ештеңе автоматты түрде жіберілмейді.",
   "Copy diagnostics": "Диагностиканы көшіру",
   "Diagnostics copied. Paste them into your bug report.": "Диагностика көшірілді. Оны қате туралы есепке қойыңыз.",
-  "Couldn't copy diagnostics: {error}": "Диагностиканы көшіру мүмкін болмады: {error}"
+  "Couldn't copy diagnostics: {error}": "Диагностиканы көшіру мүмкін болмады: {error}",
+  "Saved rooms": "Сақталған бөлмелер",
+  "New saved room": "Жаңа сақталған бөлме",
+  "A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.": "Сіз достарыңызбен қайта орала алатын бөлме. Кодын және PIN-ін білетін кез келген адам кіре алады, ал алғаш кірген адам жүргізуші болады.",
+  "Room name": "Бөлме атауы",
+  "PIN": "PIN",
+  "PIN (4 to 8 digits)": "PIN (4–8 сан)",
+  "PIN, for saved rooms": "Сақталған бөлмелерге арналған PIN",
+  "Joining a saved room? Add its PIN and it stays below.": "Сақталған бөлмеге кіресіз бе? Оның PIN-ін қосыңыз, сонда ол төменде қалады.",
+  "PIN: {pin}": "PIN: {pin}",
+  "A saved room: share the code and the PIN. Whoever is in it first is the host.": "Сақталған бөлме: кодты және PIN-ді бөлісіңіз. Алғаш кірген адам жүргізуші болады.",
+  "Delete this room?": "Бұл бөлмені жою керек пе?",
+  "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} осы құрылғыдан жойылады. Оны сақтаған басқаларда ол қалады, ал сіз кодпен және PIN арқылы қайта кіре аласыз.",
+  "Give the room a name.": "Бөлмеге атау беріңіз.",
+  "The PIN is 4 to 8 digits.": "PIN 4–8 саннан тұрады.",
+  "Expected others here? Check the code and PIN.": "Мұнда басқаларды күттіңіз бе? Код пен PIN-ді тексеріңіз."
 }

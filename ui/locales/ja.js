@@ -421,5 +421,20 @@ export default {
   "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "アプリのバージョン、システム情報、最近のエラーをコピーします（ユーザー名とログイントークンは含まれません）。github.com/runley/kotakbase/issues のバグ報告に貼り付けてください。自動で送信されるものはありません。",
   "Copy diagnostics": "診断情報をコピー",
   "Diagnostics copied. Paste them into your bug report.": "診断情報をコピーしました。バグ報告に貼り付けてください。",
-  "Couldn't copy diagnostics: {error}": "診断情報をコピーできませんでした: {error}"
+  "Couldn't copy diagnostics: {error}": "診断情報をコピーできませんでした: {error}",
+  "Saved rooms": "保存したルーム",
+  "New saved room": "新しい保存ルーム",
+  "A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.": "友だちといつでも戻ってこられるルームです。コードとPINを知っている人なら誰でも参加でき、最初にいる人がホストになります。",
+  "Room name": "ルーム名",
+  "PIN": "PIN",
+  "PIN (4 to 8 digits)": "PIN（4〜8桁の数字）",
+  "PIN, for saved rooms": "保存ルーム用のPIN",
+  "Joining a saved room? Add its PIN and it stays below.": "保存ルームに参加しますか？PINを入力すると下に保存されます。",
+  "PIN: {pin}": "PIN：{pin}",
+  "A saved room: share the code and the PIN. Whoever is in it first is the host.": "保存ルームです。コードとPINを共有してください。最初にいる人がホストになります。",
+  "Delete this room?": "このルームを削除しますか？",
+  "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name}をこのデバイスから削除します。保存したほかの人には残り、コードとPINでまた参加できます。",
+  "Give the room a name.": "ルームに名前を付けてください。",
+  "The PIN is 4 to 8 digits.": "PINは4〜8桁の数字です。",
+  "Expected others here? Check the code and PIN.": "ほかの人がいるはずですか？コードとPINを確認してください。"
 }

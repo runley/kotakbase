@@ -421,5 +421,20 @@ export default {
   "Copies your app version, system and recent errors, with your user name and sign-in tokens left out. Paste it into a bug report at github.com/runley/kotakbase/issues. Nothing is sent automatically.": "Копирует версию приложения, сведения о системе и последние ошибки, без вашего имени пользователя и токенов входа. Вставьте это в отчёт об ошибке на github.com/runley/kotakbase/issues. Ничего не отправляется автоматически.",
   "Copy diagnostics": "Скопировать диагностику",
   "Diagnostics copied. Paste them into your bug report.": "Диагностика скопирована. Вставьте её в отчёт об ошибке.",
-  "Couldn't copy diagnostics: {error}": "Не удалось скопировать диагностику: {error}"
+  "Couldn't copy diagnostics: {error}": "Не удалось скопировать диагностику: {error}",
+  "Saved rooms": "Сохранённые комнаты",
+  "New saved room": "Новая сохранённая комната",
+  "A room you and your friends can come back to. Anyone with its code and PIN can join, and whoever is in it first is the host.": "Комната, в которую вы с друзьями можете возвращаться. Войти может любой, кто знает её код и PIN, а ведущим становится тот, кто зашёл первым.",
+  "Room name": "Название комнаты",
+  "PIN": "PIN",
+  "PIN (4 to 8 digits)": "PIN (от 4 до 8 цифр)",
+  "PIN, for saved rooms": "PIN для сохранённых комнат",
+  "Joining a saved room? Add its PIN and it stays below.": "Входите в сохранённую комнату? Добавьте её PIN, и она останется ниже.",
+  "PIN: {pin}": "PIN: {pin}",
+  "A saved room: share the code and the PIN. Whoever is in it first is the host.": "Сохранённая комната: поделитесь кодом и PIN. Ведущий — тот, кто зашёл первым.",
+  "Delete this room?": "Удалить эту комнату?",
+  "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} удаляется с этого устройства. У других, кто её сохранил, она останется, а вы сможете снова войти по коду и PIN.",
+  "Give the room a name.": "Дайте комнате название.",
+  "The PIN is 4 to 8 digits.": "PIN — это от 4 до 8 цифр.",
+  "Expected others here? Check the code and PIN.": "Ждали здесь других? Проверьте код и PIN."
 }
