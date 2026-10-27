@@ -77,7 +77,9 @@ main { position: fixed; inset: var(--top) 0 0 0; overflow-y: auto; padding-botto
 :root { --card-w: clamp(140px, 7vw, 230px); --card-gap: clamp(14px, 1vw, 22px); }
 .row h2 { font-size: clamp(18px, 0.95vw, 24px); font-weight: 800; margin: 0 0 12px; }
 .cards { display: flex; gap: var(--card-gap); overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
-.grid { display: flex; flex-wrap: wrap; gap: var(--card-gap); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr)); gap: var(--card-gap); } /* cards grow a little to fill each row */
+.grid > .card { width: auto; }
+.grid > :not(.card) { grid-column: 1 / -1; }
 .card { width: var(--card-w); flex: none; background: var(--panel); border-radius: 20px; padding: 8px 8px 10px; transition: background .15s; }
 .card:hover { background: var(--panel-2); }
 .card img { width: 100%; aspect-ratio: 119 / 169; height: auto; object-fit: cover; display: block; background: var(--panel-2); border-radius: 14px; }
