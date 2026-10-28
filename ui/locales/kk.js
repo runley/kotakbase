@@ -436,5 +436,6 @@ export default {
   "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} осы құрылғыдан жойылады. Оны сақтаған басқаларда ол қалады, ал сіз кодпен және PIN арқылы қайта кіре аласыз.",
   "Give the room a name.": "Бөлмеге атау беріңіз.",
   "The PIN is 4 to 8 digits.": "PIN 4–8 саннан тұрады.",
-  "Expected others here? Check the code and PIN.": "Мұнда басқаларды күттіңіз бе? Код пен PIN-ді тексеріңіз."
+  "Expected others here? Check the code and PIN.": "Мұнда басқаларды күттіңіз бе? Код пен PIN-ді тексеріңіз.",
+  "Loading: {names}": "Жүктелуде: {names}"
 }

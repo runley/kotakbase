@@ -486,5 +486,6 @@ export default {
   "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} видаляється з цього пристрою. В інших, хто її зберіг, вона залишиться, а ви зможете знову увійти за кодом і PIN.",
   "Give the room a name.": "Дайте кімнаті назву.",
   "The PIN is 4 to 8 digits.": "PIN — це від 4 до 8 цифр.",
-  "Expected others here? Check the code and PIN.": "Чекали тут інших? Перевірте код і PIN."
+  "Expected others here? Check the code and PIN.": "Чекали тут інших? Перевірте код і PIN.",
+  "Loading: {names}": "Завантажується: {names}"
 }

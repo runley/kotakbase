@@ -1526,7 +1526,9 @@ function drawRoom () {
   const tab = document.querySelector('[data-nav="together"]')
   if (tab) tab.dataset.count = room ? room.members().length + 1 : ''
   const hostName = room && (room.isHost() ? t("you're the host") : t('host: {name}', { name: room.members().find(p => p.id === room.host)?.name ?? '…' }))
-  player.room(room && `${t('{n} watching', { n: room.members().length + 1 })} · ${hostName}`, text => room?.say(text))
+  // over the video too: who's still loading (the room waits for them)
+  const loading = room ? room.members().filter(p => p.known && p.buffering).map(p => p.name) : []
+  player.room(room && `${t('{n} watching', { n: room.members().length + 1 })} · ${hostName}${loading.length ? ' · ' + t('Loading: {names}', { names: loading.join(', ') }) : ''}`, text => room?.say(text))
   if (location.hash === '#/together') togetherPage()
 }
 

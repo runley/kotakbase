@@ -436,5 +436,6 @@ export default {
   "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name}をこのデバイスから削除します。保存したほかの人には残り、コードとPINでまた参加できます。",
   "Give the room a name.": "ルームに名前を付けてください。",
   "The PIN is 4 to 8 digits.": "PINは4〜8桁の数字です。",
-  "Expected others here? Check the code and PIN.": "ほかの人がいるはずですか？コードとPINを確認してください。"
+  "Expected others here? Check the code and PIN.": "ほかの人がいるはずですか？コードとPINを確認してください。",
+  "Loading: {names}": "読み込み中：{names}"
 }

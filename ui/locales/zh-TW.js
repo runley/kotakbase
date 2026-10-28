@@ -436,5 +436,6 @@ export default {
   "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} 將從此裝置中移除。其他儲存了它的人仍會保留，你也可以用房間代碼和 PIN 再次加入。",
   "Give the room a name.": "請為房間取個名字。",
   "The PIN is 4 to 8 digits.": "PIN 為 4 到 8 位數字。",
-  "Expected others here? Check the code and PIN.": "以為這裡會有其他人？請檢查房間代碼和 PIN。"
+  "Expected others here? Check the code and PIN.": "以為這裡會有其他人？請檢查房間代碼和 PIN。",
+  "Loading: {names}": "正在載入：{names}"
 }

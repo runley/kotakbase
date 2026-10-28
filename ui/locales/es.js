@@ -436,5 +436,6 @@ export default {
   "{name} is removed from this device. Others who saved it keep it, and you can join again with its code and PIN.": "{name} se elimina de este dispositivo. Quienes la guardaron la conservan, y puedes volver a unirte con su código y PIN.",
   "Give the room a name.": "Ponle un nombre a la sala.",
   "The PIN is 4 to 8 digits.": "El PIN tiene de 4 a 8 dígitos.",
-  "Expected others here? Check the code and PIN.": "¿Esperabas a otros aquí? Revisa el código y el PIN."
+  "Expected others here? Check the code and PIN.": "¿Esperabas a otros aquí? Revisa el código y el PIN.",
+  "Loading: {names}": "Cargando: {names}"
 }
