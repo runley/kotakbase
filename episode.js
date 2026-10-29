@@ -1,7 +1,12 @@
 // Guess the episode number from a release file name, e.g. "[Group] Show - 05 (1080p) [ABCD1234].mkv" -> 5
+// (?!\.\d\b): "05.5" is a recap between 5 and 6, not episode 5 (while "E11.1080p" is still 11)
+const clean = name => name.replace(/\[[^\]]*\]|\([^)]*\)|\.[a-z0-9]+$/gi, ' ')
+const marked = n => n.match(/(?:^|[^a-z])(?:EP?|Episode)\s?(\d{1,4})(?!\d|\.\d\b)/i) ?? n.match(/\s-\s(\d{1,4})(?!\d|\.\d\b)/)
+// The number the name explicitly marks as its episode ("E05", "Episode 5", " - 05"), not just any number in it
+export const markedEpisode = name => { const m = marked(clean(name)); return m ? Number(m[1]) : null }
 export function episodeOf (name) {
-  const n = name.replace(/\[[^\]]*\]|\([^)]*\)|\.[a-z0-9]+$/gi, ' ')
-  const m = n.match(/(?:^|[^a-z])(?:EP?|Episode)\s?(\d{1,4})(?!\d)/i) ?? n.match(/\s-\s(\d{1,4})(?!\d)/) ?? n.match(/.*\b(\d{1,4})(?:v\d)?\b/)
+  const n = clean(name)
+  const m = marked(n) ?? n.match(/.*\b(?<!\d\.)(\d{1,4})(?:v\d)?\b(?!\.\d\b)/)
   return m ? Number(m[1]) : null
 }
 
@@ -9,8 +14,8 @@ export const VIDEO = /\.(mkv|mp4|webm|m4v|avi|mov)$/i
 // Programs and scripts: an anime release never needs one, so a torrent carrying one is almost certainly a fake
 export const RISKY = /\.(exe|scr|bat|cmd|com|lnk|msi|vbs|ps1|pif|hta|jar)$/i
 
-// "S02E05" → 2, a special's "S00E08" → 0, no SxxEyy → null
-const fileSeason = name => { const m = name.match(/\bS(\d{1,2})E\d/i); return m ? Number(m[1]) : null }
+// "S02E05", "Season 2 - 05" or "S2 - 05" → 2, a special's "S00E08" → 0, no season named → null
+const fileSeason = name => { const m = name.match(/\bS(\d{1,2})E\d|\bSeason\s?(\d{1,2})\b|\bS(\d{1,2})\s+-\s/i); return m ? Number(m[1] ?? m[2] ?? m[3]) : null }
 // Specials (season 0) are never a regular episode: packs put them next to the episodes with the same numbers
 // ("Specials/…S00E08" beside "…S02E08"), and S00 sorts first
 const regular = videos => videos.filter(f => fileSeason(f.name) !== 0)

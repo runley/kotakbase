@@ -4,17 +4,18 @@
 // carry on when Kotakbase starts again.
 import fs from 'node:fs'
 import path from 'node:path'
-import { findEpisode, pickFile, VIDEO, RISKY } from './episode.js'
+import { findEpisode, markedEpisode, VIDEO, RISKY } from './episode.js'
 
 const tk = s => s // messages shown by the page, in the user's language (see main.js)
 
-// Which files of a torrent to download: one file asked for by index, one episode (the best match), or for several
-// episodes (a season pack) each one found by its number. [] when nothing matches.
+// Which files of a torrent to download: one file asked for by index, or each episode found by its number. For one
+// episode, a torrent's only video counts too unless its name marks another episode (a movie, an unnumbered release).
+// [] when nothing matches.
 export function chooseFiles (files, { fileIndex, episodes }) {
   if (fileIndex != null) return files[fileIndex] && VIDEO.test(files[fileIndex].name) ? [{ file: files[fileIndex], episode: episodes[0]?.episode ?? null }] : []
-  const found = episodes.length === 1
-    ? [{ file: pickFile(files, episodes[0].episode, episodes[0].numbering), episode: episodes[0].episode }]
-    : episodes.map(e => ({ file: findEpisode(files, e.episode, e.numbering), episode: e.episode }))
+  const videos = files.filter(f => VIDEO.test(f.name))
+  const lone = e => episodes.length === 1 && videos.length === 1 && [null, e.episode].includes(markedEpisode(videos[0].name)) ? videos[0] : null
+  const found = episodes.map(e => ({ file: findEpisode(files, e.episode, e.numbering) ?? lone(e), episode: e.episode }))
   const seen = new Set()
   return found.filter(f => f.file && VIDEO.test(f.file.name) && !seen.has(f.file) && seen.add(f.file))
 }
@@ -30,7 +31,7 @@ export function createDownloads ({ client, store, defaultDir, trackers, isPlayin
   let saved = {}
   try { saved = JSON.parse(fs.readFileSync(store, 'utf8')) } catch {}
   // { id (info hash), mediaId, title, cover, magnet, dir, status: 'active' | 'paused' | 'done' | 'error', error,
-  //   files: [{ index, episode, name, path, length, have }] }
+  //   files: [{ index, episode, name, path, length, have }], existed: [the torrent's paths already on disk when added] }
   const items = Array.isArray(saved.items) ? saved.items : []
   let dir = typeof saved.dir === 'string' && path.isAbsolute(saved.dir) ? saved.dir : defaultDir
   const torrents = new Map() // id -> torrent, while downloading
@@ -44,6 +45,8 @@ export function createDownloads ({ client, store, defaultDir, trackers, isPlayin
   const owns = t => [...torrents.values()].includes(t)
   // client.remove returns before the torrent has closed its files, and Windows won't delete an open file
   const drop = t => new Promise(resolve => client.remove(t, {}, () => resolve()).catch(() => resolve()))
+  // a path another entry downloaded too (the same batch from another upload): not this one's to delete
+  const shared = (it, p) => items.some(o => o !== it && o.files.some(f => inside(o.dir, f.path) === p))
   const rm = p => { if (p) try { fs.rmSync(p, { force: true }) } catch (e) { console.warn('Could not delete', p, e.message) } }
 
   const snapshot = () => items.map(it => {
@@ -102,7 +105,7 @@ export function createDownloads ({ client, store, defaultDir, trackers, isPlayin
     // pieces at the edges of wanted files also write into their neighbours: those partial files go too (listed first,
     // since a removed torrent forgets its files)
     const keep = new Set(it?.files.map(f => f.index))
-    const extra = it?.status === 'done' ? t.files.filter((f, i) => !keep.has(i)).map(f => inside(it.dir, f.path)) : []
+    const extra = it?.status === 'done' ? t.files.filter((f, i) => !keep.has(i) && !it.existed?.includes(f.path)).map(f => inside(it.dir, f.path)).filter(p => p && !shared(it, p)) : []
     await drop(t)
     extra.forEach(rm)
     if (extra.length) removeEmpty(it)
@@ -139,13 +142,16 @@ export function createDownloads ({ client, store, defaultDir, trackers, isPlayin
     let it = items.find(i => i.id === t.infoHash)
     // more episodes of a torrent downloaded before into another folder: back to that folder (nothing is selected yet)
     if (ours && it && path.resolve(it.dir) !== path.resolve(dir)) { await drop(t); t = await addTorrent(spec.link, it.dir) }
-    const fail = async message => { if (ours) await client.remove(t, { destroyStore: true }); throw new Error(message) }
+    // files already there (earlier episodes, the user's own) must survive a refusal and the clean-up when done
+    const existed = ours ? t.files.map(f => f.path).filter(p => { const full = inside(t.path, p); return full && fs.existsSync(full) }) : []
+    // nothing is selected yet, so nothing was written: destroyStore would only delete those existing files
+    const fail = async message => { if (ours) await drop(t); throw new Error(message) }
     const risky = t.files.filter(f => RISKY.test(f.name)).map(f => f.name)
     if (risky.length) await fail(tk("This torrent contains program files, a common sign of a fake or malware, so it won't be downloaded. Pick another source."))
     const picked = chooseFiles(t.files, spec)
     if (!picked.length) await fail(spec.episodes.length > 1 ? tk("None of this show's episodes were found in this torrent. Pick another source.") : tk("There's no video for this episode in this torrent. Pick another source."))
     if (!it) {
-      it = { id: t.infoHash, mediaId: spec.mediaId, title: spec.title, cover: spec.cover, magnet: t.magnetURI, dir, status: 'active', files: [] }
+      it = { id: t.infoHash, mediaId: spec.mediaId, title: spec.title, cover: spec.cover, magnet: t.magnetURI, dir, status: 'active', files: [], existed }
       items.push(it)
     }
     for (const { file, episode } of picked) {
@@ -190,7 +196,7 @@ export function createDownloads ({ client, store, defaultDir, trackers, isPlayin
       // Windows keeps a downloading file locked: stop the torrent first, then delete
       const t = torrents.get(id)
       if (t) { torrents.delete(id); await drop(t) }
-      for (const f of gone) rm(inside(it.dir, f.path))
+      for (const f of gone) { const p = inside(it.dir, f.path); if (!shared(it, p)) rm(p) }
       removeEmpty(it)
       it.files = it.files.filter(f => !gone.includes(f))
       if (!it.files.length) items.splice(items.indexOf(it), 1)

@@ -63,3 +63,17 @@ test('RISKY: programs and scripts, not videos, subtitles or fonts', () => {
 test('pickFile: nothing to play in a torrent without a video', () => {
   assert.equal(pickFile([{ name: 'setup.exe' }, { name: 'readme.txt' }], 1), undefined)
 })
+
+test('a recap numbered NN.5 is not episode NN', () => {
+  assert.equal(episodeOf('Show - 05.5.mkv'), null)
+  assert.equal(episodeOf('[Group] Show - 12.5 (1080p).mkv'), null)
+  assert.equal(findEpisode(['Show - 05.5.mkv', 'Show - 05.mkv'].map(name => ({ name })), 5).name, 'Show - 05.mkv')
+  assert.equal(findEpisode([{ name: 'Show - 05.5.mkv' }], 5), null)
+})
+
+test('a per-season pack named "Season 2 - NN" plays its own episode 1, not the series-wide number', () => {
+  const ids = { abs: 13, tvdbSeason: 2, tvdbSeasonEpisode: 1 }
+  const pack = Array.from({ length: 13 }, (_, i) => ({ name: `Show Season 2 - ${String(i + 1).padStart(2, '0')}.mkv` }))
+  assert.equal(findEpisode(pack, 1, ids).name, 'Show Season 2 - 01.mkv')
+  assert.equal(findEpisode(pack.map(f => ({ name: f.name.replace('Season 2', 'S2') })), 1, ids).name, 'Show S2 - 01.mkv')
+})
