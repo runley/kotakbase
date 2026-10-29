@@ -473,7 +473,6 @@ app.setAppUserModelId(app.isPackaged ? 'app.kotakbase' : 'app.kotakbase.dev')
 app.whenReady().then(async () => {
   protocol.handle('app', serveUi)
   openCors(session.defaultSession)
-  await migrateStorage()
   win = new BrowserWindow({
     width: 1400,
     height: 860,
@@ -487,6 +486,8 @@ app.whenReady().then(async () => {
   // KOTAKBASE_SCREEN=1 opens on the first screen other than the main one (test runs, kept out of the way of your work)
   const other = screen.getAllDisplays().filter(d => d.id !== screen.getPrimaryDisplay().id)[Number(process.env.KOTAKBASE_SCREEN) - 1]
   if (other) win.setBounds(other.workArea)
+  // after win exists: closing migrateStorage's window would otherwise be the last window closing, which quits the app
+  await migrateStorage()
   win.loadURL(`${ORIGIN}/index.html`)
   // nothing but the app's own page ever loads in its window (a dropped file or link, a link in injected HTML)
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN + '/')) e.preventDefault() })
