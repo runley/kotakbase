@@ -54,20 +54,23 @@ export function merge (L, remote, base) {
 
 // Pushing one show Kotakbase changed: the entry to save on AniList, 'delete', or null (nothing to send). Progress is
 // never lowered, and COMPLETED stays (replaying an earlier episode), except by an explicit "Mark unwatched" (unwatch).
-export function pushTarget (L, base, unwatch = false) {
+// live: AniList's entry right now (it may have moved on the site since base); status and stars unchanged here keep it.
+export function pushTarget (L, base, unwatch = false, live = base) {
   const B = view(base)
+  const R = view(live)
   let T
   if (!L) {
-    if (!B) return null
-    if (unwatch) T = { status: 'PLANNING', progress: 0, stars: B.stars } // every episode unmarked: kept as planned, never deleted
-    else return B.status === 'PLANNING' ? 'delete' : null // taken off Your List before starting it: the only delete
-  } else if (!B || unwatch) T = L
+    if (!R) return null
+    if (unwatch) T = { status: 'PLANNING', progress: 0, stars: R.stars } // every episode unmarked: kept as planned, never deleted
+    else return R.status === 'PLANNING' ? 'delete' : null // taken off Your List before starting it: the only delete
+  } else if (!R || unwatch) T = L
   else {
-    T = { ...L, progress: Math.max(L.progress, B.progress) }
-    if (B.status === 'COMPLETED' && L.status === 'CURRENT') T.status = 'COMPLETED'
+    const keep = k => B && L[k] === B[k] ? R[k] : L[k]
+    T = { status: keep('status'), progress: Math.max(L.progress, R.progress), stars: keep('stars') }
+    if (R.status === 'COMPLETED' && T.status === 'CURRENT') T.status = 'COMPLETED'
     if (T.status === 'PLANNING' && T.progress) T.status = 'CURRENT'
   }
-  return same(T, B) ? null : T
+  return same(T, R) ? null : T
 }
 
 // SaveMediaListEntry's arguments: PAUSED / REPEATING on AniList stay as they are; the score is sent only when the stars
@@ -145,14 +148,19 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     const b = base()
     const old = b.entries[id]
     const L = locals().get(id) ?? null
-    const T = pushTarget(L, old, item.unwatch)
-    if (!T) return { status: 200, skipped: true }
-    let r
+    if (!pushTarget(L, old, item.unwatch)) return { status: 200, skipped: true }
+    // the base is from the last pull, maybe days ago: target AniList's entry as it is now (none: 404)
+    let r = await native.query(`query($userId: Int, $mediaId: Int) { MediaList(userId: $userId, mediaId: $mediaId) { ${ENTRY_FIELDS} } }`, { userId: b.user, mediaId: id })
+    if (r.status !== 200 && r.status !== 404) return r
+    const live = r.status === 200 && r.data?.MediaList ? fromApi(r.data.MediaList) : null
+    const T = pushTarget(L, old, item.unwatch, live)
+    if (!T) return { status: 200 }
+    await new Promise(resolve => setTimeout(resolve, GAP))
     if (T === 'delete') {
-      r = await native.query('mutation($id: Int) { DeleteMediaListEntry(id: $id) { deleted } }', { id: old.entryId })
+      r = await native.query('mutation($id: Int) { DeleteMediaListEntry(id: $id) { deleted } }', { id: live.entryId })
       if (r.status === 200 || r.status === 404) { delete b.entries[id]; r.status = 200 }
     } else {
-      const v = saveVars(id, T, old)
+      const v = saveVars(id, T, live)
       const args = Object.keys(v)
       r = await native.query(`mutation(${args.map(k => `$${k}: ${TYPES[k]}`).join(', ')}) { SaveMediaListEntry(${args.map(k => `${k}: $${k}`).join(', ')}) { ${ENTRY_FIELDS} } }`, v)
       if (r.status === 200) b.entries[id] = fromApi(r.data.SaveMediaListEntry)

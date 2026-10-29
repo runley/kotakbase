@@ -76,6 +76,20 @@ test('pushTarget: what a change here sends', () => {
   assert.deepEqual(pushTarget(e('PLANNING', 0), null), e('PLANNING', 0))
 })
 
+test('pushTarget: against AniList as it is now, not the last pull', () => {
+  // ep 6 marked on AniList's site since; ep 4 watched here doesn't lower it
+  assert.equal(pushTarget(e('CURRENT', 4), remote('CURRENT', 3), false, remote('CURRENT', 6)), null)
+  // completed there since; still CURRENT here: stays completed
+  assert.equal(pushTarget(e('CURRENT', 4), remote('CURRENT', 3), false, remote('COMPLETED', 12)), null)
+  // dropped or rated there since, unchanged here: kept while progress goes up
+  assert.deepEqual(pushTarget(e('CURRENT', 4, 2), remote('CURRENT', 3, 40), false, remote('DROPPED', 3, 100)), e('DROPPED', 4, 5))
+  // "Mark unwatched" still lowers it
+  assert.deepEqual(pushTarget(e('CURRENT', 2), remote('CURRENT', 3), true, remote('CURRENT', 6)), e('CURRENT', 2))
+  // deleted there since: sent again; started there since: not deleted
+  assert.deepEqual(pushTarget(e('CURRENT', 4), remote('CURRENT', 3), false, null), e('CURRENT', 4))
+  assert.equal(pushTarget(null, remote('PLANNING', 0), false, remote('CURRENT', 2)), null)
+})
+
 test('outbox: one item per show, a change during a send survives it', () => {
   let box = queue({}, 1)
   box = queue(box, 2)
