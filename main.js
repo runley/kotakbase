@@ -1,4 +1,5 @@
-import { app, BaseWindow, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, shell, Tray } from 'electron'
+import { app, BaseWindow, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, screen, session, shell, Tray } from 'electron'
+import { pathToFileURL } from 'node:url'
 import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
@@ -38,6 +39,48 @@ ipcMain.handle('diagnostics', (_, page) => redact([
 ].join('\n'), os.homedir()))
 
 const dir = import.meta.dirname
+
+// The page is served from app://kotakbase/, not file://: Electron lets a file:// page, and the extension workers in it,
+// read any file on the disk (even with webSecurity on). Extensions still scrape other sites: openCors does that.
+const ORIGIN = 'app://kotakbase'
+const UI = path.join(dir, 'ui')
+protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }])
+function serveUi (req) {
+  const url = new URL(req.url)
+  if (url.host !== 'kotakbase') return new Response('', { status: 404 })
+  if (url.pathname === '/blank') return new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } }) // for migrateStorage
+  const file = path.join(UI, decodeURIComponent(url.pathname))
+  return file.startsWith(UI + path.sep) ? net.fetch(pathToFileURL(file).href) : new Response('', { status: 404 })
+}
+// Every site answers the page as if it allowed cross-origin requests, as webSecurity: false used to do, so extensions
+// can scrape trackers that send no CORS headers. Local files stay out of reach.
+function openCors (ses) {
+  ses.webRequest.onHeadersReceived({ urls: ['http://*/*', 'https://*/*'] }, (d, cb) => {
+    const headers = Object.fromEntries(Object.entries(d.responseHeaders ?? {}).filter(([k]) => !/^access-control-/i.test(k)))
+    cb({
+      responseHeaders: { ...headers, 'Access-Control-Allow-Origin': ['*'], 'Access-Control-Allow-Headers': ['*, Authorization'], 'Access-Control-Allow-Methods': ['*'], 'Access-Control-Expose-Headers': ['*'] },
+      ...(d.method === 'OPTIONS' && { statusLine: 'HTTP/1.1 204 No Content' }) // preflights pass even on sites that 404 them
+    })
+  })
+}
+// Saved data (localStorage) belongs to the page's origin: copied once from the old file:// page to app://.
+async function migrateStorage () {
+  const marker = path.join(app.getPath('userData'), 'storage-migrated')
+  if (fs.existsSync(marker)) return
+  const w = new BrowserWindow({ show: false })
+  try {
+    await w.loadFile(path.join(dir, 'LICENSE')) // any file:// page shares the old storage; this one runs no code
+    const entries = await w.webContents.executeJavaScript('JSON.stringify(Object.entries(localStorage))')
+    await w.loadURL(`${ORIGIN}/blank`)
+    await w.webContents.executeJavaScript(`for (const [k, v] of ${entries}) if (localStorage.getItem(k) === null) localStorage.setItem(k, v)`)
+    await session.defaultSession.flushStorageData()
+    fs.writeFileSync(marker, '')
+  } catch (e) {
+    console.error('Saved data not moved to app://, tried again next start:', e) // shortcut: until then the page starts empty
+  } finally {
+    w.destroy()
+  }
+}
 
 // Keys kept out of the repo: secrets.local.json (git-ignored, packaged into the installer; see secrets.example.json),
 // or the MAL_CLIENT_ID / ANILIST_CLIENT_ID environment variables when running from source. A missing key just turns its feature off.
@@ -126,7 +169,9 @@ const server = http.createServer((req, res) => {
   let start = 0
   let end = file.length - 1
   if (range?.[1]) start = Number(range[1])
-  if (range?.[2]) range[1] ? (end = Math.min(Number(range[2]), end)) : (start = file.length - Number(range[2]))
+  if (range?.[2]) range[1] ? (end = Math.min(Number(range[2]), end)) : (start = Math.max(0, file.length - Number(range[2])))
+  // past the end (a seek to the very end asks for bytes=<length>-): createReadStream would throw out of the handler
+  if (start > end) return res.writeHead(416, { 'Content-Range': `bytes */${file.length}` }).end()
   res.writeHead(range ? 206 : 200, {
     // Chromium's webm demuxer plays matroska too
     'Content-Type': /\.mp4$|\.m4v$/i.test(file.name) ? 'video/mp4' : 'video/webm',
@@ -425,7 +470,10 @@ setInterval(() => {
 // Windows shows notifications only for an app with an id (the installer's appId). Dev runs get their own, or Windows
 // mixes them up with the installed app and shows electron.exe's icon in its taskbar and Start search.
 app.setAppUserModelId(app.isPackaged ? 'app.kotakbase' : 'app.kotakbase.dev')
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  protocol.handle('app', serveUi)
+  openCors(session.defaultSession)
+  await migrateStorage()
   win = new BrowserWindow({
     width: 1400,
     height: 860,
@@ -433,15 +481,15 @@ app.whenReady().then(() => {
     backgroundColor: '#000000',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(dir, 'preload.cjs'),
-      // extensions scrape third-party sites from the page, same as Hayase which also turns CORS off
-      webSecurity: false
+      preload: path.join(dir, 'preload.cjs')
     }
   })
   // KOTAKBASE_SCREEN=1 opens on the first screen other than the main one (test runs, kept out of the way of your work)
   const other = screen.getAllDisplays().filter(d => d.id !== screen.getPrimaryDisplay().id)[Number(process.env.KOTAKBASE_SCREEN) - 1]
   if (other) win.setBounds(other.workArea)
-  win.loadFile(path.join(dir, 'ui', 'index.html'))
+  win.loadURL(`${ORIGIN}/index.html`)
+  // nothing but the app's own page ever loads in its window (a dropped file or link, a link in injected HTML)
+  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN + '/')) e.preventDefault() })
   // the page's own warnings and errors (uncaught ones included) go to the diagnostics log too
   win.webContents.on('console-message', e => { if (e.level === 'warning' || e.level === 'error') problems.add(e.level === 'warning' ? 'page warn' : 'page error', [`${e.message} (${String(e.sourceId).split('/').pop()}:${e.lineNumber})`]) })
   // With "hide to tray" (Settings, on by default) closing only hides the window, so a mis-click mid-episode loses nothing

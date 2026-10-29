@@ -976,12 +976,12 @@ function sourceCard (r, k, lastUsed) {
   const batch = r.type === 'batch'
   const exts = [...r.extensions].map(id => ext.configs[id]).filter(Boolean)
   return `<button class="rel" data-k="${k}">
-    <span class="rel-check ${r.accuracy}" title="${t('{level} accuracy', { level: esc(t(r.accuracy)) })}">${ICON.check}</span>
+    <span class="rel-check ${esc(r.accuracy)}" title="${t('{level} accuracy', { level: esc(t(r.accuracy)) })}">${ICON.check}</span>
     <span class="rel-icon ${batch ? 'folder' : r.type === 'best' ? 'best' : ''}">${batch ? ICON.folder : r.type === 'best' ? ICON.best : ICON.file}</span>
     <span class="rel-main">
       <b>${esc(group || r.title)}${lastUsed ? `<span class="badge">${t('Last used')}</span>` : ''}</b>
       <span class="rel-name">${esc(r.title)}</span>
-      <span class="rel-meta">${batch ? `<i class="rel-batch">${t('Batch')}</i> · ` : ''}<em class="${seedClass(r.seeders)}">${t('{n} seeders', { n: r.seeders })}</em> · ${size(r.size)}${r.date.getTime() ? ` · ${esc(ago(r.date))}` : ''}</span>
+      <span class="rel-meta">${batch ? `<i class="rel-batch">${t('Batch')}</i> · ` : ''}<em class="${seedClass(r.seeders)}">${t('{n} seeders', { n: esc(r.seeders) })}</em> · ${size(r.size)}${r.date.getTime() ? ` · ${esc(ago(r.date))}` : ''}</span>
     </span>
     <span class="rel-side">
       <span class="rel-exts">${exts.map(c => `<img src="${esc(c.icon)}" alt="${esc(c.name)}" title="${esc(c.name)}">`).join('')}</span>

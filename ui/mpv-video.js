@@ -52,9 +52,10 @@ export class MpvVideo {
       ;(this.paused ? this.onpause : this.onplay)?.()
       this.onloadedmetadata?.()
     }
+    // before the loaded check: a file mpv can't open never sends file-loaded (a stale end-file has reason "stop")
+    if (e.event === 'end-file' && e.reason === 'error') return this.#fail(e.file_error ?? 'unsupported format')
     if (!this.#loaded) return
     if (e.event === 'playback-restart') this.onplaying?.() // playing after the load or a seek
-    if (e.event === 'end-file' && e.reason === 'error') this.#fail(e.file_error ?? 'unsupported format')
   }
 
   set src (url) { mpv.load(url).catch(e => this.#fail(e.message)) }

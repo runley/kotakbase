@@ -1,5 +1,6 @@
 // Hayase-compatible extension manager: same manifest JSON, same gh:/npm:/http URL rules, same source API.
 import { t } from './i18n.js'
+import { clean } from './ext-clean.js'
 const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
 const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
 
@@ -122,7 +123,7 @@ export async function search (query, { movie, batch }, onUpdate) {
     const opts = { ...defaults, ...settings[id].options }
     for (const fn of ['single', movie && 'movie', batch && 'batch'].filter(Boolean)) {
       jobs.push(timeout(w.call(fn, query, opts), 30000, 'timed out').then(results => {
-        for (const r of results) {
+        for (const r of clean(results)) {
           const prev = byHash.get(r.hash)
           // the same torrent from several extensions often comes with differently formatted names; keep them all
           if (prev) {
