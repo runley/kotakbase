@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { newCode, formatCode, parseCode, inviteLink, valid, validLoad, syncPlan, electHost, loadKey, validPin } from './ui/room.js'
+import { newCode, formatCode, parseCode, inviteLink, valid, validLoad, syncPlan, electHost, hostAfterHello, loadKey, validPin, shareLink } from './ui/room.js'
 
 test('room codes: 12 unambiguous characters, typed back in any format', () => {
   const code = newCode()
@@ -22,7 +22,13 @@ test('messages from other members: only well-formed ones get through', () => {
   assert.ok(validLoad({ ...load, link: 'magnet:?xt=urn:btih:abc&dn=[SubsPlease] Slime - 16 (1080p).mkv&tr=udp://t:1' }))
   assert.ok(validLoad({ ...load, link: '08ada5a7a6183aae1e09d831df6748d566095a10' }))
   assert.ok(validLoad({ ...load, link: 'BBMWHGU4YQ4GVQ2HCXI53EN5LAEBAO2G' }))
-  assert.ok(validLoad({ ...load, link: 'https://nyaa.si/download/1.torrent' }))
+  // nothing that makes others' apps fetch a URL the host picked
+  assert.ok(!validLoad({ ...load, link: 'https://nyaa.si/download/1.torrent' }))
+  assert.ok(!validLoad({ ...load, link: 'magnet:?xt=urn:btih:abc&xs=http://127.0.0.1/x.torrent' }))
+  assert.equal(shareLink('magnet:?xt=urn:btih:abc&dn=A&xs=http://lan/x&ws=http://e/&as=http://e/&x.pe=1.2.3.4:5&tr.1=udp://t:1&XS.2=http://e'),
+    'magnet:?xt=urn:btih:abc&dn=A&tr.1=udp://t:1')
+  assert.equal(shareLink('https://nyaa.si/download/1.torrent'), null)
+  assert.equal(shareLink('08ada5a7a6183aae1e09d831df6748d566095a10'), '08ada5a7a6183aae1e09d831df6748d566095a10')
   assert.ok(!validLoad({ ...load, link: 'magnet:?xt=urn:btih:abc\nevil' }))
   assert.ok(!validLoad({ ...load, link: 'not a link' }))
   assert.ok(!validLoad({ ...load, link: 'javascript:alert(1)' }))
@@ -35,6 +41,8 @@ test('messages from other members: only well-formed ones get through', () => {
   assert.ok(!valid({ t: 'control', paused: true, time: NaN }))
   assert.ok(valid({ t: 'hello', name: 'Ann', since: Date.now(), host: null }))
   assert.ok(!valid({ t: 'hello', name: 'x'.repeat(41), since: 1 }))
+  assert.ok(!valid({ t: 'hello', name: 'Ann', since: Date.now() + 2 * 864e5 })) // joined in the future
+  assert.ok(!valid({ t: 'hello', name: 'Ann', since: Infinity }))
   assert.ok(valid({ t: 'chat', text: 'hi' }))
   assert.ok(!valid({ t: 'chat', text: '   ' }))
   assert.ok(!valid({ t: 'chat', text: 'x'.repeat(301) }))
@@ -58,6 +66,19 @@ test('electHost: whoever joined first, the same pick on every device', () => {
   assert.equal(electHost(members), 'a')
   assert.equal(electHost([...members].reverse()), 'a')
   assert.equal(electHost([]), null)
+})
+
+test('hostAfterHello: believe a host you can see, settle two hosts by election', () => {
+  const seen = id => id === 'a' || id === 'b'
+  const elect = () => 'a'
+  assert.equal(hostAfterHello(null, 'b', seen, elect), 'b') // just joined
+  assert.equal(hostAfterHello(null, 'zz', seen, elect), null) // names nobody here
+  assert.equal(hostAfterHello(null, null, seen, elect), null)
+  assert.equal(hostAfterHello('b', 'b', seen, elect), 'b')
+  assert.equal(hostAfterHello('b', null, seen, elect), 'b')
+  // after a blip both sides hosted: each one's hello names a different host, both re-elect the same one
+  assert.equal(hostAfterHello('b', 'a', seen, elect), 'a')
+  assert.equal(hostAfterHello('a', 'b', seen, elect), 'a')
 })
 
 test('loadKey: same episode and file means the same thing playing', () => {

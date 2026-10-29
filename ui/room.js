@@ -16,11 +16,19 @@ export const validPin = pin => /^\d{4,8}$/.test(pin)
 const str = (v, max) => typeof v === 'string' && v.length <= max
 const int = v => Number.isInteger(v) && v >= 0 && v < 1e9
 const num = v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 1e7
-// what extensions hand over: a magnet (names in it may have raw spaces), a bare info hash (hex or base32), or a .torrent URL
-const TORRENT = /^(magnet:\?[^\x00-\x1f]+|[0-9a-f]{40}|[a-z2-7]{32}|https?:\/\/[^\s\x00-\x1f]+)$/i
+// What a room shares: a bare info hash (hex or base32), or a magnet (names in it may have raw spaces) keeping only what
+// names the torrent and its trackers. Others' apps open it, so no .torrent URLs and no xs/ws/as/x.pe: those make them
+// fetch URLs or dial peers the host picked. null for anything else.
+const KEEP = /^(xt|dn|tr|xl|so)(\.\d+)?=/i
+export function shareLink (link) {
+  if (typeof link !== 'string') return null
+  if (/^([0-9a-f]{40}|[a-z2-7]{32})$/i.test(link)) return link
+  if (!/^magnet:\?[^\x00-\x1f]+$/i.test(link)) return null
+  return 'magnet:?' + link.slice(8).split('&').filter(p => KEEP.test(p)).join('&')
+}
 export function validLoad (l) {
   if (!l || typeof l !== 'object') return false
-  if (!int(l.mediaId) || !int(l.episode) || !str(l.link, 4096) || !TORRENT.test(l.link) || !str(l.key, 5000)) return false
+  if (!int(l.mediaId) || !int(l.episode) || !str(l.link, 4096) || shareLink(l.link) !== l.link || !str(l.key, 5000)) return false
   if (l.fileIndex != null && !int(l.fileIndex)) return false
   if (l.title != null && !str(l.title, 500)) return false
   if (l.numbering != null && (typeof l.numbering !== 'object' || !Object.values(l.numbering).every(v => v == null || int(v)))) return false
@@ -29,7 +37,7 @@ export function validLoad (l) {
 export function valid (m) {
   if (!m || typeof m !== 'object') return false
   switch (m.t) {
-    case 'hello': return str(m.name, 40) && Number.isSafeInteger(m.since) && m.since > 0 && (m.host == null || str(m.host, 40)) && (m.room == null || str(m.room, 40))
+    case 'hello': return str(m.name, 40) && Number.isSafeInteger(m.since) && m.since > 0 && m.since < Date.now() + 864e5 && (m.host == null || str(m.host, 40)) && (m.room == null || str(m.room, 40))
     case 'state': return typeof m.paused === 'boolean' && num(m.time) && (m.load == null || validLoad(m.load))
     case 'control': return typeof m.paused === 'boolean' && num(m.time)
     case 'host': return str(m.id, 40)
@@ -51,6 +59,9 @@ export function syncPlan (host, local) {
 
 // Everyone picks the same new host on their own: whoever joined first (their own clock, as they said in hello)
 export const electHost = members => [...members].sort((a, b) => a.since - b.since || (a.id < b.id ? -1 : 1))[0]?.id ?? null
+// The host after a member's hello names `claim`: a newcomer believes it if it's someone it can see; two hosts (two
+// people took an empty room, or a network blip split it) → everyone settles on the same one with elect()
+export const hostAfterHello = (host, claim, seen, elect) => !claim || claim === host ? host : !host ? (seen(claim) ? claim : null) : elect()
 
 export const loadKey = l => l ? JSON.stringify([l.mediaId, l.episode, l.link, l.fileIndex ?? null]) : ''
 
@@ -84,6 +95,7 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
   }
 
   const isHost = () => host === me.id
+  const known = () => [me, ...[...members.values()].filter(p => p.known)]
   const send = (channel, m) => { try { if (channel.readyState === 'open') channel.send(JSON.stringify(m)) } catch {} }
   const broadcast = m => { for (const p of members.values()) send(p.channel, m) }
   const changed = () => { if (!closed) onChange() }
@@ -123,16 +135,19 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
       return
     }
     if (m.t === 'hello') {
-      Object.assign(peer, { name: m.name, since: m.since, known: true })
+      // since is what elects the host: once said, a member can't move it earlier (renaming says hello again)
+      Object.assign(peer, { name: m.name, since: peer.known ? peer.since : m.since, known: true })
       if (m.room && pin && !title) { title = m.room; onTitle(title) } // joined with just the code and PIN: learn its name
-      if (!host && m.host) setHost(m.host) // just joined: learn who the host is
-      // two people walked into an empty saved room at once and both took it: everyone settles on the same one
-      else if (pin && m.host && host && m.host !== host) setHost(electHost([me, ...[...members.values()].filter(p => p.known)]))
+      const next = hostAfterHello(host, m.host, id => id === from || id === me.id || members.has(id), () => electHost(known()))
+      if (next !== host) setHost(next)
       return changed()
     }
-    if (m.t === 'host' && from === host) return setHost(m.id)
+    if (m.t === 'host' && from === host && (m.id === me.id || members.has(m.id))) return setHost(m.id)
     if (m.t === 'chat') return addChat(peer.known ? peer.name : tr('Someone'), m.text.trim(), false)
-    if (m.t === 'status') { peer.buffering = m.buffering; peer.key = m.key; return changed() }
+    if (m.t === 'status') {
+      if (m.buffering && (!peer.buffering || m.key !== peer.key)) peer.bufferingSince = Date.now()
+      peer.buffering = m.buffering; peer.key = m.key; return changed()
+    }
     if (m.t === 'control' && isHost()) {
       const p = playerNow()
       if (!p) return
@@ -175,8 +190,8 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
       const changedHere = mine(video, now) && (isHost() || followed)
       if (isHost()) {
         if (changedHere || now - lastSent > 1000) sendState()
-        // wait for anyone still loading this episode, then carry on
-        const waiting = [...members.values()].some(m => m.buffering && m.key === loadKey(load))
+        // wait for anyone still loading this episode, then carry on; someone stuck for half a minute isn't waited for
+        const waiting = [...members.values()].some(m => m.buffering && m.key === loadKey(load) && now - m.bufferingSince < 30_000)
         if (waiting && !video.paused) { autoPaused = true; ignoreUntil = now + 1200; video.pause(); sendState() }
         if (!waiting && autoPaused && video.paused) { autoPaused = false; ignoreUntil = now + 1200; video.play(); sendState() }
         if (changedHere && video.paused) autoPaused = false // paused by hand: stays paused
@@ -208,7 +223,7 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
     },
     onClose (id) {
       members.delete(id)
-      if (id === host) setHost(electHost([me, ...[...members.values()].filter(m => m.known)]))
+      if (id === host) setHost(electHost(known()))
       changed()
     },
     onStatus (s) { net = s; changed() }
@@ -216,7 +231,7 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
   me.id = connection.id
   const timer = setInterval(tick, 250)
   // a saved room with nobody in it after a while: this device hosts it (with others there, their hello said who does)
-  const claimTimer = pin && setTimeout(() => { if (!host && !closed) setHost(electHost([me, ...[...members.values()].filter(p => p.known)])) }, 8000)
+  const claimTimer = pin && setTimeout(() => { if (!host && !closed) setHost(electHost(known())) }, 8000)
 
   return {
     code,
@@ -234,6 +249,7 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
     // this device started playing something: as host, that's what the room watches now
     played (l) {
       if (!isHost()) return
+      l = { ...l, link: shareLink(l.link) ?? l.link } // app.js already swaps .torrent URLs for their info hash
       load = { ...l, key: loadKey(l) }
       sendState()
       changed()

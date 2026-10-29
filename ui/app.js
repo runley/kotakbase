@@ -1230,7 +1230,8 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
     fileIndex = await chooseFile(m, result.link)
     if (fileIndex === null) return
   }
-  room?.played({ mediaId: m.id, episode, link: result.link, title: result.title, fileIndex, numbering })
+  // a .torrent URL isn't shared (others' apps would fetch it): its info hash is, which main gives public trackers
+  room?.played({ mediaId: m.id, episode, link: /^https?:/i.test(result.link) && result.hash ? result.hash : result.link, title: result.title, fileIndex, numbering })
   const local = result.local ?? (fromRoom ? downloadedFile(result.link, fileIndex) : null)
   const follower = !!room && !room.isHost() // the host moves everyone to the next episode
   nowPlaying = { title: title(m), episode, total: epCount(m), cover: m.coverImage.extraLarge }
