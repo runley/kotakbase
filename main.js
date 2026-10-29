@@ -543,7 +543,6 @@ const checkUpdate = () => app.isPackaged
   ? autoUpdater.checkForUpdates().catch(e => setUpdate({ status: 'error', error: e.message }))
   : setUpdate({ status: 'error', error: 'Updates only work in the installed app.' })
 function setupUpdates () {
-  autoUpdater.allowPrerelease = true
   autoUpdater.autoInstallOnAppQuit = false // done in will-quit below: Kotakbase exits with app.exit(), which skips the updater's own hook
   autoUpdater.on('checking-for-update', () => { if (update.status !== 'ready') setUpdate({ status: 'checking' }) })
   autoUpdater.on('update-available', i => setUpdate({ status: 'downloading', version: i.version }))
