@@ -122,3 +122,15 @@ test('parseRedirect: the token from the redirect fragment', () => {
   assert.equal(parseRedirect('https://evil.example/api/v2/oauth/pin#access_token=a'), null)
   assert.equal(parseRedirect('not a url'), null)
 })
+
+test('rewatching a finished show: AniList keeps it completed, and nothing pulls the rewatch back', () => {
+  const p = { episode: 3, time: 200, duration: 1400, rewatch: true }
+  const show = { status: 'FINISHED', episodes: 12 }
+  const L = localEntry(p, false, 4, show)
+  assert.deepEqual(L, e('COMPLETED', 12, 4))
+  assert.deepEqual(localEntry(p, false, 0), e('COMPLETED', 3)) // details not loaded: still completed
+  const done = remote('COMPLETED', 12, 80)
+  assert.deepEqual(merge(L, done, done), L) // a pull: the same, so nothing is imported over the rewatch
+  assert.equal(pushTarget(L, done, false, done), null) // nothing sent
+  assert.deepEqual(pushTarget(e('COMPLETED', 12, 5), done, false, done), e('COMPLETED', 12, 5)) // a new rating still goes
+})

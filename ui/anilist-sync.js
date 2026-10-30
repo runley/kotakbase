@@ -18,6 +18,7 @@ export const same = (a, b) => !a === !b && (!a || (a.status === b.status && a.pr
 // saved before the `finished` flag existed, like the app's isFinished.
 export function localEntry (p, inList, stars = 0, show) {
   if (!p) return inList ? { status: 'PLANNING', progress: 0, stars } : null
+  if (p.rewatch) return { status: 'COMPLETED', progress: Math.max(p.episode, show?.episodes ?? 0), stars } // rewatching: still completed
   const ended = p.time >= (p.duration || 1) * 0.9 // its episode is watched too (the last one: the entry stays on it)
   // finished: false = imported from AniList as CURRENT with every episode watched, which stays CURRENT there
   const finished = p.finished ?? (show?.status === 'FINISHED' && show.episodes && p.episode >= show.episodes && ended)
@@ -246,7 +247,9 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     const ratings = load('ratings', {})
     for (const [id, T] of imports) {
       const L = localEntry(progress[id], list.includes(id), ratings[id] ?? 0, show(id))
-      if (T.status === 'PLANNING') { if (!list.includes(id)) list.push(id) } else if (!L || L.status !== T.status || L.progress !== T.progress) {
+      if (T.status === 'PLANNING') { if (!list.includes(id)) list.push(id) } else if (progress[id]?.rewatch && T.status === 'COMPLETED') {
+        // rewatching here: AniList still saying completed doesn't take the rewatch's progress back
+      } else if (!L || L.status !== T.status || L.progress !== T.progress) {
         const e = remote.get(id)
         progress[id] = { ...toLocal(T, progress[id], e?.media?.episodes ?? show(id)?.episodes), at: Math.max(progress[id]?.at ?? 0, (e?.updatedAt ?? 0) * 1000) || Date.now() }
       }

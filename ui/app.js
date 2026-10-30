@@ -1262,6 +1262,8 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
       const entry = watched && !last ? { episode: episode + 1, time: 0, duration: 1 } : { episode, time, duration }
       // the final episode of a show that has finished airing: it leaves Continue Watching
       if (watched && last && m.status === 'FINISHED') entry.finished = true
+      // watching a show you'd finished again: it stays in Continue Watching, and AniList keeps it completed
+      else if (isFinished(m) || progress()[m.id]?.rewatch) entry.rewatch = true
       save('progress', { ...progress(), [m.id]: { ...entry, at: Date.now() } })
     },
     onPrev: () => sources(m, episode - 1),
