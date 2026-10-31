@@ -286,8 +286,12 @@ const surprise = kind => SURPRISE.includes(kind) ? `<button class="more surprise
 const seasonName = () => ['Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer', 'Summer', 'Summer', 'Fall', 'Fall', 'Fall', 'Winter'][new Date().getMonth()]
 const popularThis = () => ({ Winter: t('Popular this Winter'), Spring: t('Popular this Spring'), Summer: t('Popular this Summer'), Fall: t('Popular this Fall') })[seasonName()]
 const tile = () => `<a class="tile" href="#/more/season"><b>${popularThis()}</b><span>${t('The most-followed shows of the season')}</span><span class="tile-go">${t('View all →')}</span></a>`
+// a short row's empty end: a lime tile filling the rest of the width
+const fillTile = kind => ['continue', 'list'].includes(kind)
+  ? `<a class="tile fill" href="#/more/trending"><b>${t('Looking for more?')}</b><span>${t("See what everyone's watching right now")}</span><span class="tile-go">${t('Trending Now')} →</span></a>`
+  : ['recommended', 'because'].includes(kind) ? `<div class="tile fill"><b>${t('Sharper picks')}</b><span>${t('Score the shows you finish, and these get closer to your taste.')}</span></div>` : ''
 // "Because you watched…" rows have no "View More": the row is all of them
-const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2>${kind === 'because' ? '' : `<span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span>`}</div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' || kind === 'because' })).join('')}</div></section>` : ''
+const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2>${kind === 'because' ? '' : `<span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span>`}</div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' || kind === 'because' })).join('')}${list.length < ROW_LIMIT ? fillTile(kind) : ''}</div></section>` : ''
 
 // "Your List" toggle: outlined bookmark, filled once saved
 const listButton = (m, cls) => {
