@@ -60,7 +60,9 @@ main { position: fixed; inset: var(--top) 0 0 0; overflow-y: auto; padding-botto
 .tile b { font: 800 26px/1.05 var(--display); }
 .tile-go { margin-top: auto; font-weight: 700; }
 .tile:hover .tile-go { text-decoration: underline; }
-.tile.fill { flex: 1 0 calc(var(--card-w) * 1.4); width: auto; }
+.tile.fill { flex: 1 0 calc(var(--card-w) * 1.4); width: auto; background: var(--panel); color: var(--muted); border-left: 3px solid var(--accent); border-radius: 0 22px 22px 0; }
+.tile.fill b { color: var(--accent); font-size: 20px; }
+.tile.fill .tile-go { color: var(--text); }
 
 .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .tag { background: var(--panel-2); color: var(--text); padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; }
