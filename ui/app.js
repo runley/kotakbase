@@ -6,6 +6,7 @@ import { fromMal, malAnime } from './mal.js'
 import { createSync } from './anilist-sync.js'
 import { openRoom, parseCode, formatCode, inviteLink, newCode, validPin } from './room.js'
 import { t, setLanguage, pickLanguage, language, LANGUAGES } from './i18n.js'
+import { STATS_QUERY, SAMPLE, sampleHistory, crowd, habits } from './stats.js'
 
 
 const $app = document.getElementById('app')
@@ -498,6 +499,159 @@ async function historyPage () {
     </a>`
   }
   $app.innerHTML = `<div class="page hist-page"><h2>${t('History')}</h2>${html || `<p class="muted">${t('Episodes you watch show up here.')}</p>`}</div>`
+}
+
+// Stats page: AniList's numbers for the account, scores against everyone's, and when you watch, from Kotakbase's own
+// history. Signed out (or the sign-in expired), it's drawn from made-up numbers, blurred, under a sign-in card.
+async function statsPage () {
+  $app.innerHTML = `<div class="page"><h2>${t('Stats')}</h2><p class="muted">${t('Loading…')}</p></div>`
+  const account = await window.native.anilist.account()
+  if (!account.user || account.expired) return drawStats(SAMPLE, sampleHistory(), account)
+  const r = await window.native.anilist.query(STATS_QUERY, { userId: account.user.id })
+  if (r.status === 401) return route() // the sign-in just expired: the locked page asks again
+  if (r.status !== 200) throw new Error(r.status === 0 ? t('AniList unreachable') : `AniList: ${r.error || r.status}`)
+  return drawStats(r.data, load('history', []))
+}
+// locked: the account (signed out or expired) when drawing the preview
+async function drawStats (data, history, locked) {
+  const user = data.User
+  const s = user.statistics.anime
+  const lists = data.MediaListCollection.lists
+  const shows = new Map(lists.flatMap(l => l.entries).map(e => [e.media.id, e]))
+  const num = (n, digits = 0) => Number(n).toLocaleString(language(), { maximumFractionDigits: digits })
+  const time = min => new Intl.DurationFormat(language(), { style: 'narrow' }).format(min < 60 ? { minutes: min } : { days: Math.floor(min / 1440), hours: Math.floor(min % 1440 / 60) })
+  const toggles = (panel, modes, on) => `<div class="tabbar">${modes.map(([k, l]) => `<button data-stats="${panel}:${k}" class="${k === on ? 'on' : ''}">${t(l)}</button>`).join('')}</div>`
+  const state = { radar: 'hours', timeline: 'count', board: 'genres' }
+
+  const planned = s.statuses.find(x => x.status === 'PLANNING')?.minutesWatched ?? 0
+  const strip = [[num(s.count), t('Anime')], [num(s.episodesWatched), t('Episodes')], [num(s.minutesWatched / 1440, 1), t('Days watched')],
+    [num(planned / 1440, 1), t('Days planned')], [num(s.meanScore, 1), t('Mean score')], [num(s.standardDeviation, 1), t('Std deviation')]]
+
+  const radar = () => {
+    const key = state.radar === 'hours' ? 'minutesWatched' : 'count'
+    const top = s.genres.slice().sort((a, b) => b[key] - a[key]).slice(0, 8)
+    if (top.length < 3) return `<p class="muted">${t('Not enough shows yet.')}</p>`
+    const max = top[0][key] || 1
+    const pt = (i, k) => { const a = -Math.PI / 2 + i * 2 * Math.PI / top.length; return [150 + Math.cos(a) * 110 * k, 150 + Math.sin(a) * 110 * k].map(v => v.toFixed(1)).join() }
+    return `<svg class="radar" viewBox="-50 0 400 300" role="img" aria-label="${t('Taste profile')}">
+      ${[1 / 3, 2 / 3, 1].map(k => `<polygon class="grid-line" points="${top.map((_, i) => pt(i, k)).join(' ')}"/>`).join('')}
+      <polygon class="shape" points="${top.map((g, i) => pt(i, Math.max(0.04, g[key] / max))).join(' ')}"/>
+      ${top.map((g, i) => { const [x, y] = pt(i, 1.2).split(','); return `<text x="${x}" y="${+y + 4}">${esc(t(g.genre))}</text>` }).join('')}</svg>`
+  }
+
+  const c = crowd(lists)
+  const crowdPanel = !c
+    ? `<p class="muted">${t('Rate shows on AniList to compare your scores with everyone else’s.')}</p>`
+    : `<div class="stats-row"><div><b class="stats-num accent">${c.diff > 0 ? '+' : ''}${num(c.diff, 1)}</b><span class="muted">${t('vs. the AniList average')}</span></div>
+        <div><b class="stats-num">${num(c.gems)}</b><span class="muted">${t('hidden gems you rated 80+')}</span></div></div>
+      <div class="crowd">${c.rows.map(x => `<a href="#/anime/${x.media.id}"><img src="${esc(x.media.coverImage.large)}" alt="" loading="lazy"><b>${esc(title(x.media))}</b>
+        <span class="muted">${t('you {score} · avg {avg}', { score: x.you, avg: x.avg })}</span>
+        <span class="diverge"><i class="${x.diff > 0 ? 'up' : 'down'}" style="width:${Math.min(50, Math.abs(x.diff))}%"></i></span>
+        <span class="${x.diff > 0 ? 'accent' : ''}">${x.diff > 0 ? '+' : ''}${x.diff}</span></a>`).join('')}</div>`
+  const verdict = !c ? '' : c.diff > 3 ? t('Generous critic') : c.diff < -3 ? t('Harsh critic') : t('Fair critic')
+
+  const years = s.releaseYears.slice().sort((a, b) => a.releaseYear - b.releaseYear)
+  const timeline = () => {
+    if (!years.length) return `<p class="muted">${t('Not enough shows yet.')}</p>`
+    const first = years[0].releaseYear
+    // every year in the range (0 where none), except for mean score, where an empty year has no score at all
+    const all = state.timeline === 'score' ? years.filter(y => y.meanScore) : Array.from({ length: years.at(-1).releaseYear - first + 1 }, (_, i) => years.find(y => y.releaseYear === first + i) ?? { releaseYear: first + i, count: 0, meanScore: 0, minutesWatched: 0, mediaIds: [] })
+    const val = y => state.timeline === 'hours' ? y.minutesWatched / 60 : state.timeline === 'score' ? y.meanScore : y.count
+    const watched = new Map(s.startYears.map(y => [y.startYear, y.count]))
+    const max = Math.max(1, ...all.map(val), ...(state.timeline === 'count' ? watched.values() : []))
+    // drawn at the panel's real width so text stays its normal size
+    const W = $app.querySelector('[data-panel="timeline"]')?.clientWidth || 1000
+    const H = 240
+    const x = i => 20 + i * (W - 40) / Math.max(1, all.length - 1)
+    const y = v => H - 24 - v * (H - 54) / max
+    const line = all.map((d, i) => `${x(i).toFixed(1)},${y(val(d)).toFixed(1)}`)
+    const dashed = state.timeline === 'count' ? all.map((d, i) => watched.has(d.releaseYear) ? `${x(i).toFixed(1)},${y(watched.get(d.releaseYear)).toFixed(1)}` : '').filter(Boolean) : []
+    // the user's favourite show of up to 4 of the busiest years, at least a quarter of the chart apart so labels don't overlap
+    const best = d => d.mediaIds.map(id => shows.get(id)).filter(e => e?.score).sort((a, b) => b.score - a.score)[0]
+    const labelled = new Set()
+    for (const d of all.slice().sort((a, b) => b.count - a.count)) {
+      if (labelled.size < 4 && best(d) && [...labelled].every(o => Math.abs(o.releaseYear - d.releaseYear) >= all.length / 4)) labelled.add(d)
+    }
+    const short = s => s.length > 30 ? s.slice(0, 29) + '…' : s
+    const step = Math.ceil(all.length / Math.max(2, Math.floor(W / 90)))
+    return `<svg class="timeline" viewBox="0 0 ${W} ${H + 20}" role="img" aria-label="${t('Timeline')}">
+      <path class="area" d="M${line.join(' L')} L${x(all.length - 1)},${y(0)} L${x(0)},${y(0)}Z"/>
+      <polyline class="line" points="${line.join(' ')}"/>${dashed.length > 1 ? `<polyline class="dashed" points="${dashed.join(' ')}"/>` : ''}
+      ${all.map((d, i) => `<circle cx="${x(i)}" cy="${y(val(d))}" r="3.5"><title>${d.releaseYear}: ${num(val(d), 1)}</title></circle>
+        ${(all.length - 1 - i) % step ? '' : `<text class="axis" x="${x(i)}" y="${H + 12}">${d.releaseYear}</text>`}
+        ${labelled.has(d) ? `<text class="label" x="${x(i)}" y="${y(val(d)) - 12}" text-anchor="${i > all.length - 3 ? 'end' : i < 2 ? 'start' : 'middle'}">${esc(short(title(best(d).media)))}</text>` : ''}`).join('')}</svg>`
+  }
+  const oldYear = years.find(y => y.mediaIds.some(id => shows.has(id)))
+  const oldest = oldYear && { year: oldYear.releaseYear, show: shows.get(oldYear.mediaIds.find(id => shows.has(id))) }
+  const bestYear = years.filter(y => y.count >= 3 && y.meanScore).sort((a, b) => b.meanScore - a.meanScore)[0]
+  const timelineNote = `<p class="stats-note muted"><span><b class="accent">—</b> ${t('released that year')}</span>${s.startYears.length ? `<span><b>- -</b> ${t('watched that year')}</span>` : ''}
+    ${oldest ? `<span>${t('Oldest: {title} ({year})', { title: esc(title(oldest.show.media)), year: oldest.year })}</span>` : ''}
+    ${bestYear ? `<span>${t('Best year: {year} · avg {score}', { year: bestYear.releaseYear, score: num(bestYear.meanScore, 1) })}</span>` : ''}</p>`
+
+  const h = habits(history)
+  const binge = h.binge && !locked && (await byIds([h.binge.id]).catch(() => []))[0]
+  const level = n => n ? Math.min(4, Math.ceil(n / 2)) : 0 // 1-2 episodes, 3-4, 5-6, 7+
+  const today = new Date()
+  const dayTip = (n, i) => `${t('{n} episodes', { n })} · ${new Date(today.getFullYear(), today.getMonth(), today.getDate() - (h.days.length - 1 - i)).toLocaleDateString(language(), { weekday: 'short', month: 'short', day: 'numeric' })}`
+  const habitsPanel = `<div class="heat">${h.days.map((n, i) => `<i class="l${level(n)}" role="img" aria-label="${esc(dayTip(n, i))}" data-tip="${esc(dayTip(n, i))}"></i>`).join('')}</div>
+    <div class="stats-row">${[[t('{n} episodes', { n: h.episodes }), t('last 26 weeks')], [t('{n} days', { n: h.streak }), t('longest streak')],
+      ...(h.hour === null ? [] : [[new Date(2000, 0, 1, h.hour).toLocaleTimeString(language(), { hour: 'numeric' }), t('peak time')],
+        [new Date(2026, 0, 4 + h.weekday).toLocaleDateString(language(), { weekday: 'long' }), t('busiest day')]]),
+      ...(binge ? [[t('{n} episodes', { n: h.binge.n }), t('biggest binge · {title}', { title: esc(title(binge)) })]] : [])]
+      .map(([n, l]) => `<div><b>${n}</b><span class="muted">${l}</span></div>`).join('')}</div>`
+
+  const RANKS = { genres: ['Genres', x => t(x.genre)], tags: ['Tags', x => x.tag.name], studios: ['Studios', x => x.studio.name], voiceActors: ['Voice actors', x => x.voiceActor.name.userPreferred] }
+  const board = () => {
+    const rows = s[state.board].slice(0, 6)
+    const max = rows[0]?.count || 1
+    return `<table class="board"><tr><th>#</th><th></th><th>${t('Count')}</th><th>${t('Score')}</th><th>${t('Time')}</th></tr>
+      ${rows.map((x, i) => `<tr><td class="accent">${i + 1}</td><td>${esc(RANKS[state.board][1](x))}</td><td>${x.count}<span class="bar" style="width:${x.count / max * 48}px"></span></td>
+        <td>${x.meanScore ? num(x.meanScore, 1) : '–'}</td><td class="muted">${time(x.minutesWatched)}</td></tr>`).join('')}</table>`
+  }
+
+  const gate = !locked
+    ? ''
+    : `<div class="stats-gate"><div class="stats-gate-card" role="dialog" aria-labelledby="stats-gate-title">
+      <h2 id="stats-gate-title">${t('See your anime stats')}</h2>
+      ${locked.configured === false
+        ? `<p class="muted">${t("AniList sync isn't set up in this build (no AniList Client ID).")}</p>`
+        : `<p class="muted">${locked.expired ? t('Your AniList sign-in expired or was revoked, so nothing is being synced.') : t('Sign in with AniList to see your genres, how your scores compare with everyone else’s, and when you watch.')}</p>
+          <p class="err"></p><button class="btn" data-stats-signin>${locked.expired ? t('Sign in again') : t('Sign in with AniList')}</button>`}
+    </div></div>`
+  $app.innerHTML = `<div class="page stats-wrap">${gate}<div class="stats ${locked ? 'locked' : ''}" ${locked ? 'aria-hidden="true" inert' : ''}>
+    <section class="stats-box stats-head"><img src="${esc(user.avatar.large)}" alt=""><div><b>${esc(user.name)}</b><span class="muted">AniList</span></div>
+      <div class="stats-strip">${strip.map(([n, l], i) => `<div><b class="stats-num ${i ? '' : 'accent'}">${n}</b><span class="muted">${l}</span></div>`).join('')}</div></section>
+    <div class="stats-cols">
+      <section class="stats-box"><div class="stats-title"><h3>${t('Taste profile')}</h3>${toggles('radar', [['hours', 'Hours'], ['count', 'Count']], state.radar)}</div><div data-panel="radar">${radar()}</div></section>
+      <section class="stats-box"><div class="stats-title"><h3>${t('You vs. the crowd')}</h3>${verdict ? `<span class="badge">${verdict}</span>` : ''}</div>${crowdPanel}</section>
+    </div>
+    <section class="stats-box"><div class="stats-title"><h3>${t('Timeline')}</h3>${toggles('timeline', [['count', 'Titles'], ['hours', 'Hours'], ['score', 'Mean score']], state.timeline)}</div><div data-panel="timeline"></div>${timelineNote}</section>
+    <div class="stats-cols wide-left">
+      <section class="stats-box"><div class="stats-title"><h3>${t('Watch habits')}</h3><span class="muted">${t('From Kotakbase’s history')}</span></div>${habitsPanel}</section>
+      <section class="stats-box"><div class="stats-title"><h3>${t('Top 6')}</h3>${toggles('board', Object.entries(RANKS).map(([k, [l]]) => [k, l]), state.board)}</div><div data-panel="board">${board()}</div></section>
+    </div></div></div>`
+  const draw = { radar, timeline, board }
+  const timelinePanel = $app.querySelector('[data-panel="timeline"]')
+  new ResizeObserver(() => { timelinePanel.innerHTML = timeline() }).observe(timelinePanel) // drawn at its width, now and on resize
+  $app.onclick = async e => {
+    const signin = e.target.closest('[data-stats-signin]')
+    if (signin) {
+      signin.disabled = true
+      signin.textContent = t('Waiting for AniList…')
+      const r = await sync.signIn()
+      if (r.ok) return route()
+      signin.disabled = false
+      signin.textContent = locked.expired ? t('Sign in again') : t('Sign in with AniList')
+      $app.querySelector('.stats-gate .err').textContent = r.error
+      return
+    }
+    const b = e.target.closest('[data-stats]')
+    if (!b) return
+    const [panel, mode] = b.dataset.stats.split(':')
+    state[panel] = mode
+    b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b))
+    $app.querySelector(`[data-panel="${panel}"]`).innerHTML = draw[panel]()
+  }
 }
 
 // "View More": a home row in full. AniList rows show their top 100; your own rows (progress, list) show everything.
@@ -1702,6 +1856,7 @@ async function route () {
     else if (name === 'extensions') await extensionsPage()
     else if (name === 'settings') settingsPage()
     else if (name === 'history') await historyPage()
+    else if (name === 'stats') await statsPage()
     else if (name === 'schedule') await schedulePage()
     else if (name === 'together') togetherPage()
     else if (name === 'downloads') downloadsPage()

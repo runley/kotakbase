@@ -15,6 +15,7 @@ export const DATA = [
   'Genre', 'Year', 'Season', 'Format', 'Status', 'Sort',
   'Airing', 'Not yet aired', 'Popularity', 'Score', 'Trending', 'Newest', 'Title',
   'high', 'medium', 'low',
+  'Hours', 'Titles', 'Genres', 'Tags', 'Studios', 'Voice actors',
   'Continue Watching', 'Removed from Continue Watching', 'Your List', 'Recommended For You', 'Trending Now', 'All Time Popular'
 ]
 

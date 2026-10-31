@@ -17,6 +17,7 @@ export const LANGUAGES = {
 export const EN = {
   '{n} episodes': { one: '{n} episode', other: '{n} episodes' },
   '{n} shows': { one: '{n} show', other: '{n} shows' },
+  '{n} days': { one: '{n} day', other: '{n} days' },
   '{n} people in the room': { one: '{n} person in the room', other: '{n} people in the room' },
   '{n} episodes downloaded': { one: '{n} episode downloaded', other: '{n} episodes downloaded' },
   '{n} seeders': { one: '{n} seeder', other: '{n} seeders' },
