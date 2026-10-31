@@ -265,6 +265,8 @@ export default {
   "This season's most-followed shows are one click away": "Маусымның ең көп қаралатын анимелері бір басу жерде",
   "Need a new obsession?": "Жаңа сүйікті аниме іздейсіз бе?",
   "The all-time favorites are a good place to start": "Барлық уақыттың сүйіктілерінен бастаған жөн",
+  "Fuel the Hype": "Күтуді қыздырыңыз",
+  "Next season's most-awaited shows": "Келесі маусымның ең күтілген анимелері",
   "Recommended For You": "Сізге ұсынылады",
   "Related": "Байланысты",
   "Releasing": "Шығуда",

@@ -265,6 +265,8 @@ export default {
   "This season's most-followed shows are one click away": "Die meistverfolgten Serien der Saison sind nur einen Klick entfernt",
   "Need a new obsession?": "Lust auf eine neue Lieblingsserie?",
   "The all-time favorites are a good place to start": "Die Favoriten aller Zeiten sind ein guter Anfang",
+  "Fuel the Hype": "Hype-Futter",
+  "Next season's most-awaited shows": "Die meisterwarteten Serien der nächsten Season",
   "Recommended For You": "Empfohlen für dich",
   "Related": "Verwandt",
   "Releasing": "Läuft",

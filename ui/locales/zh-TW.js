@@ -265,6 +265,8 @@ export default {
   "This season's most-followed shows are one click away": "本季最受關注的作品，一鍵直達",
   "Need a new obsession?": "想找新坑？",
   "The all-time favorites are a good place to start": "從歷代人氣作品開始準沒錯",
+  "Fuel the Hype": "燃起期待",
+  "Next season's most-awaited shows": "下一季最受期待的作品",
   "Recommended For You": "為你推薦",
   "Related": "相關作品",
   "Releasing": "連載中",

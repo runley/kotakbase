@@ -265,6 +265,8 @@ export default {
   "This season's most-followed shows are one click away": "今シーズン最も注目の作品はワンクリックで",
   "Need a new obsession?": "新しくハマる作品を探すなら",
   "The all-time favorites are a good place to start": "歴代の人気作から始めるのがおすすめ",
+  "Fuel the Hype": "期待を高めよう",
+  "Next season's most-awaited shows": "来シーズンの注目作",
   "Recommended For You": "あなたへのおすすめ",
   "Related": "関連作品",
   "Releasing": "配信中",

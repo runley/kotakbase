@@ -112,12 +112,18 @@ const remember = (list, at = Date.now()) => { list.forEach(m => { if (full(m) ||
 const ROW_LIMIT = 20 // cards per home row; "View More" shows up to 100
 const trending = (limit = ROW_LIMIT) => top('sort: TRENDING_DESC', '', undefined, limit)
 const allTimePopular = (limit = ROW_LIMIT) => top('sort: POPULARITY_DESC', '', undefined, limit)
-const seasonal = (limit = ROW_LIMIT) => {
+// [season, year] now (December counts as next year's winter, like AniList), and the one after it
+const thisSeason = () => {
   const d = new Date()
-  const season = ['WINTER', 'WINTER', 'SPRING', 'SPRING', 'SPRING', 'SUMMER', 'SUMMER', 'SUMMER', 'FALL', 'FALL', 'FALL', 'WINTER'][d.getMonth()]
-  const year = d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear()
-  return top('sort: POPULARITY_DESC, season: $s, seasonYear: $y', '$s: MediaSeason, $y: Int', { s: season, y: year }, limit)
+  return [['WINTER', 'WINTER', 'SPRING', 'SPRING', 'SPRING', 'SUMMER', 'SUMMER', 'SUMMER', 'FALL', 'FALL', 'FALL', 'WINTER'][d.getMonth()], d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear()]
 }
+const nextSeason = () => {
+  const [s, y] = thisSeason()
+  return s === 'FALL' ? ['WINTER', y + 1] : [{ WINTER: 'SPRING', SPRING: 'SUMMER', SUMMER: 'FALL' }[s], y]
+}
+const bySeason = ([s, y], limit) => top('sort: POPULARITY_DESC, season: $s, seasonYear: $y', '$s: MediaSeason, $y: Int', { s, y }, limit)
+const seasonal = (limit = ROW_LIMIT) => bySeason(thisSeason(), limit)
+const upcoming = (limit = ROW_LIMIT) => bySeason(nextSeason(), limit) // "Fuel the Hype": most followed already = most awaited
 // Saved details of every show you've watched, listed or have in History, so Continue Watching, Your List and History
 // appear instantly and still work while AniList is down. Loaded at start; refreshed from AniList once per app start.
 const SAVED = 'shows' // id -> [details, when fetched]
@@ -285,7 +291,9 @@ const surprise = kind => SURPRISE.includes(kind) ? `<button class="more surprise
 // "Popular this season" leads with a lime tile, which also opens the full list, in place of the row's heading
 const seasonName = () => ['Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer', 'Summer', 'Summer', 'Fall', 'Fall', 'Fall', 'Winter'][new Date().getMonth()]
 const popularThis = () => ({ Winter: t('Popular this Winter'), Spring: t('Popular this Spring'), Summer: t('Popular this Summer'), Fall: t('Popular this Fall') })[seasonName()]
-const tile = () => `<a class="tile" href="#/more/season"><b>${popularThis()}</b><span>${t('The most-followed shows of the season')}</span><span class="tile-go">${t('View all →')}</span></a>`
+// "Fuel the Hype" (next season's shows) leads with one too
+const LEAD = { season: () => [popularThis(), t('The most-followed shows of the season')], upcoming: () => [t('Fuel the Hype'), t("Next season's most-awaited shows")] }
+const tile = kind => { const [head, line] = LEAD[kind](); return `<a class="tile" href="#/more/${kind}"><b>${head}</b><span>${line}</span><span class="tile-go">${t('View all →')}</span></a>` }
 // a short row's empty end: a lime tile filling the rest of the width, with a quip taken in turn (so rows next to each
 // other differ), starting somewhere new each app start
 const PICK_QUIPS = [
@@ -312,7 +320,7 @@ function fillTile (kind) {
   return `<div class="tile fill"><b>${head}</b><span>${line}</span></div>`
 }
 // "Because you watched…" rows have no "View More": the row is all of them
-const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2>${kind === 'because' ? '' : `<span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span>`}</div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' || kind === 'because' })).join('')}${list.length < ROW_LIMIT ? fillTile(kind) : ''}</div></section>` : ''
+const row = (name, list, kind) => list.length ? `<section class="row">${kind in LEAD ? '' : `<div class="row-head"><h2>${esc(name)}</h2>${kind === 'because' ? '' : `<span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span>`}</div>`}<div class="cards">${kind in LEAD ? tile(kind) : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' || kind === 'because' })).join('')}${list.length < ROW_LIMIT ? fillTile(kind) : ''}</div></section>` : ''
 
 // "Your List" toggle: outlined bookmark, filled once saved
 const listButton = (m, cls) => {
@@ -367,6 +375,7 @@ async function home () {
     [t('Your List'), byIds(myList().slice(0, ROW_LIMIT), (done, total) => loading(2, done, total)), 'list'],
     [t('Trending Now'), trending(), 'trending'],
     [t('All Time Popular'), allTimePopular(), 'popular'],
+    [t('Fuel the Hype'), upcoming(), 'upcoming'],
     [t('Recommended For You'), recommended().catch(() => []), 'recommended'],
     ['', becauseRows().catch(() => []), 'because']
   ]
@@ -735,7 +744,8 @@ const MORE = {
   recommended: ['Recommended For You', recommended],
   season: ['Popular This Season', () => seasonal(100)],
   trending: ['Trending Now', () => trending(100)],
-  popular: ['All Time Popular', () => allTimePopular(100)]
+  popular: ['All Time Popular', () => allTimePopular(100)],
+  upcoming: ['Fuel the Hype', () => upcoming(100)]
 }
 async function morePage (kind) {
   const [key, load] = MORE[kind] ?? MORE.trending

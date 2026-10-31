@@ -265,6 +265,8 @@ export default {
   "This season's most-followed shows are one click away": "Найпопулярніші тайтли сезону — за один клік",
   "Need a new obsession?": "Шукаєте нове захоплення?",
   "The all-time favorites are a good place to start": "Хіти всіх часів — гарний початок",
+  "Fuel the Hype": "Підігрійте хайп",
+  "Next season's most-awaited shows": "Найочікуваніші тайтли наступного сезону",
   "Recommended For You": "Рекомендовано вам",
   "Related": "Пов’язані",
   "Releasing": "Виходить",
