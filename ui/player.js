@@ -135,7 +135,7 @@ function offerBuiltin (s, text) {
 
 /**
  * Open the player and stream `link`.
- * opts: { local (optional: a downloaded episode, { id, index }, played from disk instead of the torrent), title, subtitle, skipTimes (duration => Promise<chapters>, used when the file has none), onTitle (title clicked), onEpisodes (episode line clicked), link, episode, numbering (optional: { abs, tvdbSeason, tvdbSeasonEpisode } for continued seasons), fileIndex (optional: play this file of the torrent), resume, hasPrev, hasNext, onProgress(time, duration), onPrev, onNext, onSources (pick another source for this episode), nextInTorrent (optional: true when the next episode is in this torrent, so it's kept loaded), player ('mpv' or 'builtin'), autoMpv (switch to mpv when the built-in player finds no audio it can play) }
+ * opts: { local (optional: a downloaded episode, { id, index }, played from disk instead of the torrent), title, subtitle, skipTimes (duration => Promise<chapters>, used when the file has none), onTitle (title clicked), onEpisodes (episode line clicked), link, episode, numbering (optional: { abs, tvdbSeason, tvdbSeasonEpisode } for continued seasons), fileIndex (optional: play this file of the torrent), resume, hasPrev, hasNext, onProgress(time, duration, credits: where the ending credits start, if known), onPrev, onNext, onSources (pick another source for this episode), nextInTorrent (optional: true when the next episode is in this torrent, so it's kept loaded), player ('mpv' or 'builtin'), autoMpv (switch to mpv when the built-in player finds no audio it can play) }
  */
 // ---- Watch Together in the player: who's in the room, chat popping up over the video, and a box to answer ----
 let say = null // sends a chat message (set by the app while in a room)
@@ -275,7 +275,7 @@ export async function play (opts) {
     $('p-played').style.width = `${video.currentTime / video.duration * 100}%`
     const b = video.buffered
     for (let i = 0; i < b.length; i++) if (b.start(i) <= video.currentTime && b.end(i) >= video.currentTime) $('p-buf').style.width = `${b.end(i) / video.duration * 100}%`
-    if (Date.now() - lastSave > 3000) { lastSave = Date.now(); opts.onProgress(video.currentTime, video.duration) }
+    if (Date.now() - lastSave > 3000) { lastSave = Date.now(); opts.onProgress(video.currentTime, video.duration, creditsAt(s)) }
     showSkip(s)
   }
   video.onended = () => { opts.onProgress(video.duration, video.duration); if (opts.hasNext) actions.next() } // closes the player so the source picker shows
@@ -297,6 +297,9 @@ async function loadChapters (s) {
 }
 
 const chapterAt = (s, t) => s.chapters.findLast(c => t >= c.start)
+// the ending's start, for "watched" before the very end (a release can add minutes of its own credits after it);
+// only an ending in the last quarter counts, not one mid-file
+const creditsAt = s => s.chapters.find(c => c.kind === 'ed' && c.start > s.video.duration * 0.75)?.start ?? null
 
 // "Skip Intro" during the opening, "Skip Credits" (or "Next Episode" when the credits run to the end) during the ending
 function showSkip (s) {

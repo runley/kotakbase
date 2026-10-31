@@ -1492,12 +1492,14 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
     resume: prev?.episode === episode ? prev.time : 0,
     hasPrev: !follower && episode > 1,
     hasNext: !follower && episode < total,
-    onProgress: (time, duration) => {
-      const watched = time > duration * 0.9
+    onProgress: (time, duration, credits) => {
+      // watched: the ending credits have started, or 90% in (a release with its own extra credits can put the ending below that)
+      const watched = time > duration * 0.9 || (credits != null && time >= credits)
       const last = episode >= total
-      if (!prefetched && time > duration * 0.85) { prefetched = true; findNext(true) }
+      if (!prefetched && (watched || time > duration * 0.85)) { prefetched = true; findNext(true) }
       if (watched && !logged) { logged = true; logWatched(m, episode, last) }
-      const entry = watched && !last ? { episode: episode + 1, time: 0, duration: 1 } : { episode, time, duration }
+      // the last episode watched is saved as played to the end, so everything reading the saved time agrees it's watched
+      const entry = watched && !last ? { episode: episode + 1, time: 0, duration: 1 } : { episode, time: watched ? duration : time, duration }
       // the final episode of a show that has finished airing: it leaves Continue Watching
       if (watched && last && m.status === 'FINISHED') entry.finished = true
       // watching a show you'd finished again: it stays in Continue Watching, and AniList keeps it completed
