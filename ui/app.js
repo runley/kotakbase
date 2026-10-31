@@ -340,10 +340,10 @@ async function home () {
     [t('Continue Watching'), cont.then(l => l.slice(0, ROW_LIMIT)), 'continue'],
     [popularThis(), seasonal(), 'season'],
     [t('Your List'), byIds(myList().slice(0, ROW_LIMIT), (done, total) => loading(2, done, total)), 'list'],
-    [t('Recommended For You'), recommended().catch(() => []), 'recommended'],
-    ['', becauseRows().catch(() => []), 'because'],
     [t('Trending Now'), trending(), 'trending'],
-    [t('All Time Popular'), allTimePopular(), 'popular']
+    [t('All Time Popular'), allTimePopular(), 'popular'],
+    [t('Recommended For You'), recommended().catch(() => []), 'recommended'],
+    ['', becauseRows().catch(() => []), 'because']
   ]
   const hasShows = [Object.values(progress()).some(p => !p.hidden), false, myList().length > 0]
   $app.innerHTML = `<section class="bento" aria-label="${t('Overview')}"><div class="box box-feature"></div><div class="box box-today"><h2>${t('Airing today')}</h2><p class="muted">${t('Loading…')}</p></div></section>
