@@ -423,6 +423,11 @@ body.navigating::after { content: ''; position: fixed; top: 0; left: 0; width: 3
 .saved-head { margin: 32px 0 12px; }
 .saved-room h3 { overflow-wrap: anywhere; }
 .room-pin { display: block; margin-top: 4px; }
+.now-card { display: flex; align-items: center; gap: 14px; max-width: 460px; margin: 0 0 16px; padding: 12px; background: var(--panel); border-left: 4px solid var(--c); border-radius: 0 14px 14px 0; color: var(--text); text-decoration: none; }
+.now-card:hover { background: var(--panel-2); }
+.now-card img, .now-cover { width: 56px; height: 80px; flex: none; border-radius: 8px; object-fit: cover; background: var(--panel-2); }
+.now-card b { display: block; font-size: 15px; overflow-wrap: anywhere; }
+.now-ep { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: color-mix(in srgb, var(--c) 25%, transparent); border: 1px solid color-mix(in srgb, var(--c) 60%, transparent); }
 .room-code { display: block; margin-top: 8px; font: 800 28px var(--display); letter-spacing: 2px; }
 .people { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .people li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--panel); border-radius: 14px; }

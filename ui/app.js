@@ -1535,7 +1535,11 @@ function drawRoom () {
   if (location.hash === '#/together') togetherPage()
 }
 
-const roomNow = {} // mediaId -> title, for "Now watching"
+const roomNow = {} // mediaId -> show, for "Now watching"
+// the show's poster and its AniList color, like the dot on its card
+const nowCard = (m, l) => `<a class="now-card" href="#/anime/${l.mediaId}" style="--c:${esc(m?.coverImage.color ?? 'var(--accent)')}">
+  ${m ? `<img src="${esc(m.coverImage.large)}" alt="">` : '<span class="now-cover"></span>'}
+  <span><b>${esc(m ? title(m) : t('Loading…'))}</b><span class="now-ep">${t('Episode {n}', { n: l.episode })}</span></span></a>`
 const clock = at => new Date(at).toLocaleTimeString(language(), { hour: 'numeric', minute: '2-digit' })
 function togetherPage () {
   // redrawn whenever someone joins, leaves or writes: keep what's being typed, and the chat scrolled to the end
@@ -1564,7 +1568,7 @@ function togetherPage () {
     const people = [room.me, ...room.members()]
     const status = p => p === room.me ? '' : !p.known ? t('Connecting…') : p.buffering ? t('Loading…') : ''
     const l = room.load
-    if (l && !(l.mediaId in roomNow)) { roomNow[l.mediaId] = ''; media(l.mediaId).then(m => { roomNow[l.mediaId] = title(m); drawRoom() }, () => {}) }
+    if (l && !(l.mediaId in roomNow)) { roomNow[l.mediaId] = null; media(l.mediaId).then(m => { roomNow[l.mediaId] = m; drawRoom() }, () => {}) }
     const n = room.members().length
     const chat = room.chat()
     $app.innerHTML = `<div class="page together"><h2>${t('Watch Together')}</h2>
@@ -1577,7 +1581,7 @@ function togetherPage () {
       <div class="room-grid">
         <div>
           <h3>${t('Now watching')}</h3>
-          <p>${l ? `<a href="#/anime/${l.mediaId}">${esc(roomNow[l.mediaId] || t('Loading…'))}</a> · ${t('Episode {n}', { n: l.episode })}` : `<span class="muted">${t('Nothing yet. The host picks a show and episode as usual.')}</span>`}</p>
+          ${l ? nowCard(roomNow[l.mediaId], l) : `<p class="muted">${t('Nothing yet. The host picks a show and episode as usual.')}</p>`}
           ${l && !room.isHost() && !player.current() ? `<div class="actions"><button class="btn" data-rejoin>${t('Watch with the room')}</button></div>` : ''}
           <h3>${t('People')}</h3>
           <ul class="people">${people.map(p => `<li>
