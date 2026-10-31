@@ -1,7 +1,7 @@
 {
   "name": "kotakbase",
   "productName": "Kotakbase",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Stream anime torrents with Hayase-compatible extensions",
   "main": "main.js",
   "scripts": {
