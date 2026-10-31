@@ -44,7 +44,6 @@ export default {
   "Checking for updates…": "Перевірка оновлень…",
   "Chinese": "Китайська",
   "Choose a file": "Виберіть файл",
-  "Clear rating": "Скинути оцінку",
   "Close": "Закрити",
   "Close player": "Закрити плеєр",
   "Closing the window": "Закриття вікна",
@@ -247,6 +246,7 @@ export default {
   "Put back in Continue Watching": "Повернути в «Продовжити перегляд»",
   "Quit": "Вийти",
   "Rate it": "Оцінити",
+  "Because you watched {title}": "Бо ви дивилися {title}",
   "Recommended For You": "Рекомендовано вам",
   "Related": "Пов’язані",
   "Releasing": "Виходить",
@@ -451,12 +451,6 @@ export default {
     "few": "{n} тайтли",
     "many": "{n} тайтлів",
     "other": "{n} тайтлу"
-  },
-  "{n} stars": {
-    "one": "{n} зірка",
-    "few": "{n} зірки",
-    "many": "{n} зірок",
-    "other": "{n} зірки"
   },
   "{n} to go": "ще {n}",
   "{n} watching": {

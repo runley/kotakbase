@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { localEntry, toLocal, merge, pushTarget, saveVars, toStars, queue, dequeue, nextDelay, GAP } from './ui/anilist-sync.js'
+import { localEntry, toLocal, merge, pushTarget, saveVars, queue, dequeue, nextDelay, GAP } from './ui/anilist-sync.js'
 import { parseRedirect, REDIRECT } from './anilist-auth.js'
 
-const e = (status, progress, stars = 0) => ({ status, progress, stars })
+const e = (status, progress, score = 0) => ({ status, progress, score })
 const remote = (status, progress, score = 0) => ({ entryId: 9, status, progress, score })
 
 test('localEntry: Kotakbase → AniList', () => {
@@ -26,13 +26,12 @@ test('toLocal: AniList → Kotakbase, and back again unchanged', () => {
   // ...and it stays CURRENT once the show's details say it has finished airing, so nothing is sent for it
   assert.deepEqual(localEntry(toLocal(e('CURRENT', 12), undefined, 12), false, 0, { status: 'FINISHED', episodes: 12 }), e('CURRENT', 12))
   assert.deepEqual(toLocal(e('CURRENT', 5), { episode: 6, time: 200, duration: 1400 }), { episode: 6, time: 200, duration: 1400 }) // keeps the spot
-  for (const x of [e('CURRENT', 5), e('COMPLETED', 12), e('DROPPED', 3), e('CURRENT', 0)]) assert.deepEqual(localEntry(toLocal(x)), { ...x, stars: 0 })
+  for (const x of [e('CURRENT', 5), e('COMPLETED', 12), e('DROPPED', 3), e('CURRENT', 0)]) assert.deepEqual(localEntry(toLocal(x)), { ...x, score: 0 })
 })
 
-test('stars ⇄ score', () => {
-  assert.deepEqual([0, 1, 20, 50, 69, 70, 100].map(toStars), [0, 1, 1, 3, 3, 4, 5])
-  assert.equal(saveVars(1, e('CURRENT', 2, 4), remote('CURRENT', 1, 75)).scoreRaw, undefined) // 75 is already 4 stars: left alone
-  assert.equal(saveVars(1, e('CURRENT', 2, 5), remote('CURRENT', 1, 75)).scoreRaw, 100)
+test('score: 0-100 like AniList, sent only when it changed', () => {
+  assert.equal(saveVars(1, e('CURRENT', 2, 75), remote('CURRENT', 1, 75)).scoreRaw, undefined) // unchanged: left alone
+  assert.equal(saveVars(1, e('CURRENT', 2, 83), remote('CURRENT', 1, 75)).scoreRaw, 83)
   assert.equal(saveVars(1, e('CURRENT', 2, 0), remote('CURRENT', 1, 75)).scoreRaw, 0) // rating cleared
   assert.equal(saveVars(1, e('CURRENT', 2), remote('PAUSED', 1)).status, 'PAUSED') // AniList's own statuses stay
 })
@@ -41,15 +40,15 @@ test('merge: never lowers progress, takes the side that changed', () => {
   assert.deepEqual(merge(e('CURRENT', 3), remote('CURRENT', 7), null), e('CURRENT', 7)) // further along on AniList
   assert.deepEqual(merge(e('CURRENT', 9), remote('CURRENT', 7), remote('CURRENT', 7)), e('CURRENT', 9))
   assert.deepEqual(merge(e('CURRENT', 9), remote('COMPLETED', 12), null), e('COMPLETED', 12))
-  assert.deepEqual(merge(null, remote('PLANNING', 0, 80), null), e('PLANNING', 0, 4)) // imported
+  assert.deepEqual(merge(null, remote('PLANNING', 0, 80), null), e('PLANNING', 0, 80)) // imported
   assert.deepEqual(merge(e('CURRENT', 2), null, null), e('CURRENT', 2)) // sent
   // dropped on AniList's site, unchanged here: comes here (progress kept)
   assert.deepEqual(merge(e('CURRENT', 5), remote('DROPPED', 5), remote('CURRENT', 5)), e('DROPPED', 5))
   // restored here (↺) after being dropped: goes to AniList as CURRENT
   assert.deepEqual(merge(e('CURRENT', 5), remote('DROPPED', 5), remote('DROPPED', 5)), e('CURRENT', 5))
   // rated on AniList's site: comes here; rated here: kept
-  assert.deepEqual(merge(e('CURRENT', 5, 2), remote('CURRENT', 5, 100), remote('CURRENT', 5, 40)), e('CURRENT', 5, 5))
-  assert.deepEqual(merge(e('CURRENT', 5, 3), remote('CURRENT', 5, 40), remote('CURRENT', 5, 40)), e('CURRENT', 5, 3))
+  assert.deepEqual(merge(e('CURRENT', 5, 40), remote('CURRENT', 5, 100), remote('CURRENT', 5, 40)), e('CURRENT', 5, 100))
+  assert.deepEqual(merge(e('CURRENT', 5, 60), remote('CURRENT', 5, 40), remote('CURRENT', 5, 40)), e('CURRENT', 5, 60))
   // deleted on AniList and unchanged here, or taken off here and unchanged there: left alone, not recreated
   assert.equal(merge(e('CURRENT', 5), null, remote('CURRENT', 5)), null)
   assert.equal(merge(null, remote('PLANNING', 0), remote('PLANNING', 0)), null)
@@ -66,7 +65,7 @@ test('pushTarget: what a change here sends', () => {
   // ...but "Mark unwatched" does
   assert.deepEqual(pushTarget(e('CURRENT', 2), remote('CURRENT', 8), true), e('CURRENT', 2))
   // everything unmarked: kept on AniList as planned, progress 0, never deleted
-  assert.deepEqual(pushTarget(null, remote('CURRENT', 8, 60), true), e('PLANNING', 0, 3))
+  assert.deepEqual(pushTarget(null, remote('CURRENT', 8, 60), true), e('PLANNING', 0, 60))
   // removed from Continue Watching / put back
   assert.deepEqual(pushTarget(e('DROPPED', 5), remote('CURRENT', 5)), e('DROPPED', 5))
   assert.deepEqual(pushTarget(e('CURRENT', 5), remote('DROPPED', 5)), e('CURRENT', 5))
@@ -82,7 +81,7 @@ test('pushTarget: against AniList as it is now, not the last pull', () => {
   // completed there since; still CURRENT here: stays completed
   assert.equal(pushTarget(e('CURRENT', 4), remote('CURRENT', 3), false, remote('COMPLETED', 12)), null)
   // dropped or rated there since, unchanged here: kept while progress goes up
-  assert.deepEqual(pushTarget(e('CURRENT', 4, 2), remote('CURRENT', 3, 40), false, remote('DROPPED', 3, 100)), e('DROPPED', 4, 5))
+  assert.deepEqual(pushTarget(e('CURRENT', 4, 40), remote('CURRENT', 3, 40), false, remote('DROPPED', 3, 100)), e('DROPPED', 4, 100))
   // "Mark unwatched" still lowers it
   assert.deepEqual(pushTarget(e('CURRENT', 2), remote('CURRENT', 3), true, remote('CURRENT', 6)), e('CURRENT', 2))
   // deleted there since: sent again; started there since: not deleted
@@ -126,11 +125,11 @@ test('parseRedirect: the token from the redirect fragment', () => {
 test('rewatching a finished show: AniList keeps it completed, and nothing pulls the rewatch back', () => {
   const p = { episode: 3, time: 200, duration: 1400, rewatch: true }
   const show = { status: 'FINISHED', episodes: 12 }
-  const L = localEntry(p, false, 4, show)
-  assert.deepEqual(L, e('COMPLETED', 12, 4))
+  const L = localEntry(p, false, 80, show)
+  assert.deepEqual(L, e('COMPLETED', 12, 80))
   assert.deepEqual(localEntry(p, false, 0), e('COMPLETED', 3)) // details not loaded: still completed
   const done = remote('COMPLETED', 12, 80)
   assert.deepEqual(merge(L, done, done), L) // a pull: the same, so nothing is imported over the rewatch
   assert.equal(pushTarget(L, done, false, done), null) // nothing sent
-  assert.deepEqual(pushTarget(e('COMPLETED', 12, 5), done, false, done), e('COMPLETED', 12, 5)) // a new rating still goes
+  assert.deepEqual(pushTarget(e('COMPLETED', 12, 95), done, false, done), e('COMPLETED', 12, 95)) // a new rating still goes
 })

@@ -7,6 +7,7 @@ import { createSync } from './anilist-sync.js'
 import { openRoom, parseCode, formatCode, inviteLink, newCode, validPin } from './room.js'
 import { t, setLanguage, pickLanguage, language, LANGUAGES } from './i18n.js'
 import { STATS_QUERY, SAMPLE, sampleHistory, crowd, habits } from './stats.js'
+import { rank, diverse, taste } from './recommend.js'
 
 
 const $app = document.getElementById('app')
@@ -22,9 +23,17 @@ let sync = null // AniList sync (anilist-sync.js): queues what changed, only whi
 const save = (key, val) => {
   localStorage.setItem(key, JSON.stringify(val))
   stored.set(key, val)
-  if (key === 'progress' || key === 'list' || key === 'ratings') sync?.changed()
+  if (key === 'progress' || key === 'list' || key === 'scores') sync?.changed()
 }
 const unstore = key => { localStorage.removeItem(key); stored.delete(key) }
+// 1.0.1 and older rated 1-5 stars (also after importing an old backup): now a 1-100 score. A star rating that came
+// from AniList keeps AniList's exact score (a 75 stays 75, not 80), so the change sends nothing.
+if (localStorage.getItem('ratings') !== null) {
+  const synced = load('anilistBase', null)?.entries ?? {}
+  const fromStars = (id, n) => { const s = synced[id]?.score; return s && Math.min(5, Math.max(1, Math.round(s / 20))) === n ? s : n * 20 }
+  save('scores', { ...Object.fromEntries(Object.entries(load('ratings', {})).map(([id, n]) => [id, fromStars(id, n)])), ...load('scores', {}) })
+  unstore('ratings')
+}
 // A brand-new install: every start saves the extension list (once extensions.js has booted them, after this runs),
 // so a profile without one has never run Kotakbase. Updated installs always have it.
 const firstLaunch = localStorage.getItem('extensions') === null
@@ -37,7 +46,7 @@ window.native.setLanguage(language())
 // ---- AniList ----
 const FIELDS = `id idMal title { romaji english native userPreferred } synonyms coverImage { large extraLarge color } bannerImage
   description(asHtml: false) episodes format status season seasonYear averageScore genres duration
-  nextAiringEpisode { episode } startDate { year month day } tags { name isMediaSpoiler }`
+  nextAiringEpisode { episode } startDate { year month day } tags { name rank isMediaSpoiler }`
 // Just what cards and the home hero show, for long lists (home rows, View More, search): a top-100 list with
 // descriptions and tags is several times bigger. The show page and anything needing the rest fetch FIELDS (see full).
 const LIST_FIELDS = `id title { romaji english native userPreferred } coverImage { large extraLarge color } bannerImage
@@ -239,7 +248,7 @@ const SEASON = { WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fa
 // ---- local state: list + watch progress ----
 const myList = () => load('list', [])
 const progress = () => load('progress', {}) // id -> { episode, time, duration, at }
-const ratings = () => load('ratings', {}) // id -> 1..5 stars
+const scores = () => load('scores', {}) // id -> your 1-100 score, AniList's scale
 // Set progress by hand from an episode card: everything up to and including n watched, or n onwards unwatched
 function markWatched (m, n) {
   const entry = n < epCount(m) ? { episode: n + 1, time: 0, duration: 1 } : { episode: n, time: 1, duration: 1, ...(m.status === 'FINISHED' && { finished: true }) }
@@ -277,7 +286,8 @@ const surprise = kind => SURPRISE.includes(kind) ? `<button class="more surprise
 const seasonName = () => ['Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer', 'Summer', 'Summer', 'Fall', 'Fall', 'Fall', 'Winter'][new Date().getMonth()]
 const popularThis = () => ({ Winter: t('Popular this Winter'), Spring: t('Popular this Spring'), Summer: t('Popular this Summer'), Fall: t('Popular this Fall') })[seasonName()]
 const tile = () => `<a class="tile" href="#/more/season"><b>${popularThis()}</b><span>${t('The most-followed shows of the season')}</span><span class="tile-go">${t('View all →')}</span></a>`
-const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2><span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span></div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' })).join('')}</div></section>` : ''
+// "Because you watched…" rows have no "View More": the row is all of them
+const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2>${kind === 'because' ? '' : `<span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span>`}</div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' || kind === 'because' })).join('')}</div></section>` : ''
 
 // "Your List" toggle: outlined bookmark, filled once saved
 const listButton = (m, cls) => {
@@ -331,6 +341,7 @@ async function home () {
     [popularThis(), seasonal(), 'season'],
     [t('Your List'), byIds(myList().slice(0, ROW_LIMIT), (done, total) => loading(2, done, total)), 'list'],
     [t('Recommended For You'), recommended().catch(() => []), 'recommended'],
+    ['', becauseRows().catch(() => []), 'because'],
     [t('Trending Now'), trending(), 'trending'],
     [t('All Time Popular'), allTimePopular(), 'popular']
   ]
@@ -338,7 +349,9 @@ async function home () {
   $app.innerHTML = `<section class="bento" aria-label="${t('Overview')}"><div class="box box-feature"></div><div class="box box-today"><h2>${t('Airing today')}</h2><p class="muted">${t('Loading…')}</p></div></section>
     ${rows.map(([name], k) => `<div data-row="${k}">${hasShows[k] ? `<section class="row"><h2>${esc(name)}</h2><p class="muted" data-loading>${t('Loading…')}</p></section>` : ''}</div>`).join('')}`
   const bento = $app.firstElementChild // this drawing of the page, to notice it was replaced meanwhile
-  const filled = rows.map(([name, list, kind], k) => list.then(l => row(name, l, kind), e => `<section class="row"><h2>${esc(name)}</h2><p class="err">${esc(e.message)}</p></section>`)
+  const filled = rows.map(([name, list, kind], k) => list.then(l => kind === 'because'
+    ? l.map(([d, shows]) => row(t('Because you watched {title}', { title: title(d) }), shows, kind)).join('')
+    : row(name, l, kind), e => `<section class="row"><h2>${esc(name)}</h2><p class="err">${esc(e.message)}</p></section>`)
     .then(html => { if (bento.isConnected) $app.querySelector(`[data-row="${k}"]`).outerHTML = html }))
   const feature = bento.querySelector('.box-feature')
   cont.catch(() => []).then(async l => {
@@ -360,31 +373,66 @@ const isFinished = m => { const p = progress()[m.id]; return !!p && (p.finished 
 const inContinueWatching = m => { const p = progress()[m.id]; return !!p && !p.hidden && !isFinished(m) }
 const continueWatching = async onProgress => (await byIds(continueIds(), onProgress)).filter(inContinueWatching)
 
-// "Recommended For You": well-rated shows sharing the genres and tags that come up most among the shows you finished
-// (started-but-unfinished ones don't count), weighted by your ratings, best match first; nothing you've already started
-// or marked "Not interested".
-async function recommended () {
+// "Recommended For You" and the "Because you watched…" rows: candidates are what AniList users recommend for your
+// best-liked finished shows plus the best-rated shows in your top genres, saved for a day; recommend.js ranks them
+// by how close each is to the shows you finished (started-but-unfinished ones don't count), weighted by your scores.
+// Nothing you've already started, from the same franchise, or marked "Not interested".
+const REC_FIELDS = `${LIST_FIELDS} tags { name rank isMediaSpoiler } relations { edges { relationType node { id } } }`
+const REC_POOL = 'recPool' // { key, at, list, recBy: [[id, how many of your shows it's recommended for]], franchise: ids }
+const compact = ({ relations, ...m }) => ({ ...m, tags: m.tags.filter(x => !x.isMediaSpoiler).slice(0, 10), related: relations.edges.filter(e => FRANCHISE.includes(e.relationType)).map(e => e.node.id) })
+// your finished shows, best liked first, then the most recently watched
+const likedFirst = done => {
+  const sc = scores()
+  const at = id => progress()[id]?.at ?? 0
+  return [...done].sort((x, y) => taste(sc[y.id]) - taste(sc[x.id]) || at(y.id) - at(x.id))
+}
+function recPool (seeds, genres) {
+  const key = JSON.stringify([seeds, genres])
+  const saved = load(REC_POOL, null)
+  if (saved?.key === key && Date.now() - saved.at < 24 * 3600_000) return Promise.resolve(saved)
+  return once(REC_POOL + key, async () => {
+    const recs = await Promise.all(seeds.map(id => anilist(`query($id: Int) { Media(id: $id) { recommendations(sort: RATING_DESC, perPage: 25) { nodes { mediaRecommendation { isAdult ${REC_FIELDS} } } } } }`, { id })
+      .then(d => d.Media.recommendations.nodes.map(n => n.mediaRecommendation).filter(r => r && !r.isAdult)).catch(() => [])))
+    const best = await page('sort: SCORE_DESC, genre_in: $g, id_not_in: $seen, popularity_greater: 20000', '$g: [String], $seen: [Int]', { g: genres, seen: continueIds() }, { perPage: 50, fields: REC_FIELDS }).catch(() => [])
+    // the franchises of shows you've started, two links out (a movie linked only to the second season of one you
+    // finished), so their sequels and movies aren't recommended
+    // shortcut: the 100 shows you watched last; more would take a request per 50
+    const hop = (edges, other) => edges.filter(e => FRANCHISE.includes(e.relationType) || (other && e.relationType === 'OTHER')).map(e => e.node) // OTHER: first link only, like related()
+    const started = continueIds().slice(0, 100)
+    const franchise = new Set()
+    for (let i = 0; i < started.length; i += 50) {
+      const shows = await anilist(`query($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids) { id relations { edges { relationType node { id relations { edges { relationType node { id } } } } } } } } }`, { ids: started.slice(i, i + 50) })
+        .then(d => d.Page.media, () => [])
+      for (const n of shows.flatMap(m => hop(m.relations.edges, true))) { franchise.add(n.id); hop(n.relations.edges).forEach(x => franchise.add(x.id)) }
+    }
+    const recBy = new Map()
+    for (const m of recs.flat()) recBy.set(m.id, (recBy.get(m.id) ?? 0) + 1)
+    const list = [...new Map([...recs.flat(), ...best].map(m => [m.id, compact(m)])).values()]
+    if (!list.length) throw new Error(t('AniList unreachable'))
+    const pool = { key, at: Date.now(), list, recBy: [...recBy], franchise: [...franchise] }
+    try { save(REC_POOL, pool) } catch {} // storage full: kept for this app start only
+    return pool
+  })
+}
+async function recommendations () {
   const done = (await byIds(continueIds())).filter(isFinished)
-  if (!done.length) return []
+  if (!done.length) return { ranked: [], done }
+  const sc = scores()
   const genres = new Map()
-  const tags = new Map()
-  const bump = (map, k, w) => map.set(k, (map.get(k) ?? 0) + w)
-  const rated = ratings()
-  for (const m of done) {
-    // your star rating weighs a show: 5★ counts three times, unrated once, 1★ counts against its genres and tags
-    const w = rated[m.id] ? rated[m.id] - 2 : 1
-    m.genres.forEach(g => bump(genres, g, w))
-    m.tags.filter(tag => !tag.isMediaSpoiler).slice(0, 5).forEach(tag => bump(tags, tag.name, w)) // AniList lists a show's most fitting tags first
-  }
-  const most = (map, n) => [...map].sort((x, y) => y[1] - x[1]).slice(0, n).map(([k]) => k)
-  // the top genres pick the candidates (tags are too narrow to search by); the tags then put the closest first
-  const g = most(genres, 2)
-  const seen = continueIds()
-  const list = await once('recommended' + JSON.stringify([g, seen]), () =>
-    page('sort: SCORE_DESC, genre_in: $g, id_not_in: $seen, popularity_greater: 20000', '$g: [String], $seen: [Int]', { g, seen }, { perPage: 50 }).then(remember))
-  const nope = load('notInterested', [])
-  const match = m => m.genres.reduce((s, x) => s + (genres.get(x) ?? 0), 0) + m.tags.reduce((s, x) => s + (tags.get(x.name) ?? 0), 0)
-  return list.filter(m => !nope.includes(m.id)).sort((x, y) => match(y) - match(x))
+  for (const m of done) for (const g of m.genres) genres.set(g, (genres.get(g) ?? 0) + taste(sc[m.id]))
+  const g = [...genres].filter(([, w]) => w > 0).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k]) => k)
+  const seeds = likedFirst(done).filter(m => taste(sc[m.id]) > 0).slice(0, 6).map(m => m.id)
+  const pool = await recPool(seeds, g)
+  remember(pool.list, pool.at)
+  const nope = new Set(load('notInterested', []))
+  const ranked = rank(done, pool.list.filter(m => !nope.has(m.id)), { scores: sc, seen: [...continueIds(), ...pool.franchise ?? []], recBy: new Map(pool.recBy) })
+  return { ranked, done }
+}
+const recommended = async () => diverse((await recommendations()).ranked).map(r => r.m)
+// up to three rows, for your best-liked finished shows with at least 5 shows closest to them
+async function becauseRows () {
+  const { ranked, done } = await recommendations()
+  return likedFirst(done).map(d => [d, ranked.filter(r => r.because === d.id).map(r => r.m)]).filter(([, l]) => l.length >= 5).slice(0, 3)
 }
 
 // Shows you follow: in Continue Watching (not removed or finished) or Your List. Notifications and the schedule use these.
@@ -725,13 +773,14 @@ const ago = date => {
   return a >= 365 ? rtf.format(Math.round(days / 365), 'year') : a >= 30 ? rtf.format(Math.round(days / 30), 'month') : rtf.format(Math.round(days), 'day')
 }
 
-// Your 1-5 star rating of a show (feeds Recommended); shown once you've started it, and asked for once you finish it
-function ratingStars (m) {
-  const r = ratings()[m.id] ?? 0
+// Your 1-100 score of a show (feeds Recommended); shown once you've started it, and asked for once you finish it
+function ratingInput (m) {
+  const r = scores()[m.id] ?? ''
   const label = r ? t('Your rating') : isFinished(m) ? t('Finished! How was it?') : t('Rate it')
-  return `<div class="stars" role="group" aria-label="${t('Your rating')}"><span class="muted">${label}</span>${[1, 2, 3, 4, 5].map(n =>
-    `<button class="${n <= r ? 'on' : ''}" data-rate="${n}" aria-label="${t('{n} stars', { n })}" aria-pressed="${n === r}" title="${n === r ? t('Clear rating') : n + ' / 5'}">★</button>`).join('')}</div>`
+  return `<label class="my-score"><span class="muted">${label}</span><input type="number" min="1" max="100" step="1" inputmode="numeric" data-rate value="${r}" aria-label="${t('Your rating')}"><span class="muted">/100</span></label>`
 }
+// what's typed: a whole 1-100, or 0 (empty clears it)
+const toScore = v => { const n = Math.round(Number(v)); return n > 0 ? Math.min(100, n) : 0 }
 
 // Episode cards (thumbnail, runtime, rating, title, progress, summary, air date), used on the show page and in the
 // player's episode list; `highlight` is the episode outlined as current.
@@ -788,7 +837,7 @@ async function detail (id) {
       ${!isFinished(m) && m.status !== 'NOT_YET_RELEASED' && !(p?.episode > airedCount(m)) ? `<button class="sq" data-watched-all title="${t('Already watched: mark every episode watched')}" aria-label="${t('Already watched')}"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></button>` : ''}
       ${p?.hidden && !isFinished(m) ? `<button class="sq" data-unhide title="${t('Put back in Continue Watching')}" aria-label="${t('Put back in Continue Watching')}"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button>` : ''}
       <button class="sq" data-download-season title="${t('Download episodes to watch offline')}" aria-label="${t('Download episodes')}">${DL_ICON}</button>
-      ${p ? ratingStars(m) : ''}
+      ${p ? ratingInput(m) : ''}
     </div>
     <div class="chips">
       ${m.genres.map(g => `<button class="chip genre" data-genre="${esc(g)}" title="${t('Search {genre} anime', { genre: esc(t(g)) })}">${esc(t(g))}</button>`).join('')}
@@ -815,6 +864,13 @@ async function detail (id) {
     }
   }
   if (history.state?.tab) showTab(history.state.tab)
+  $app.onchange = e => {
+    if (!e.target.matches('[data-rate]')) return
+    const n = toScore(e.target.value)
+    const { [m.id]: old, ...rest } = scores()
+    if (n !== (old ?? 0)) save('scores', n ? { ...rest, [m.id]: n } : rest)
+    e.target.closest('.my-score').replaceWith(document.createRange().createContextualFragment(ratingInput(m)))
+  }
   $app.onclick = e => {
     const tab = e.target.closest('[data-tab]')?.dataset.tab
     if (tab) return showTab(tab)
@@ -839,13 +895,6 @@ async function detail (id) {
       const { hidden, ...entry } = progress()[m.id]
       save('progress', { ...progress(), [m.id]: entry })
       return route()
-    }
-    const rate = e.target.closest('[data-rate]')
-    if (rate) {
-      const n = +rate.dataset.rate
-      const { [m.id]: old, ...rest } = ratings()
-      save('ratings', old === n ? rest : { ...rest, [m.id]: n }) // clicking your current rating clears it
-      return rate.closest('.stars').replaceWith(document.createRange().createContextualFragment(ratingStars(m)))
     }
     if (e.target.closest('[data-download-season]')) return sources(m, Math.min(current, epCount(m)), { download: 'season' })
     const dl = e.target.closest('[data-dl-ep]')
@@ -1011,7 +1060,7 @@ function settingsPage () {
 
 // Backup: everything Kotakbase keeps, except the home-row caches (re-downloaded anyway) and AniList sync's own state
 // (tied to the sign-in, which isn't in the backup)
-const backupKeys = () => Object.keys(localStorage).filter(k => !k.startsWith('list:') && !k.startsWith('anilist'))
+const backupKeys = () => Object.keys(localStorage).filter(k => !k.startsWith('list:') && !k.startsWith('anilist') && k !== REC_POOL)
 function exportData () {
   const data = Object.fromEntries(backupKeys().map(k => [k, localStorage.getItem(k)]))
   const link = document.createElement('a')

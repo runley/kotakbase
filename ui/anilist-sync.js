@@ -2,27 +2,26 @@
 // Signed out, none of this runs. The token lives in the main process (anilist-auth.js); this side maps, merges and
 // queues. The pure helpers are exported for the tests.
 //
-// An entry here is { status, progress, stars }: AniList's status (PAUSED and REPEATING count as CURRENT), episodes
-// fully watched, and 0-5 stars (AniList's 0-100 score / 20).
+// An entry here is { status, progress, score }: AniList's status (PAUSED and REPEATING count as CURRENT), episodes
+// fully watched, and your 0-100 score (0 = none).
 
 import { t, language } from './i18n.js'
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
-export const toStars = score => score ? Math.min(5, Math.max(1, Math.round(score / 20))) : 0
 const norm = status => status === 'PAUSED' || status === 'REPEATING' ? 'CURRENT' : status
 // an AniList entry as saved: { entryId, status, progress, score }
-const view = r => r ? { status: norm(r.status), progress: r.progress ?? 0, stars: toStars(r.score) } : null
-export const same = (a, b) => !a === !b && (!a || (a.status === b.status && a.progress === b.progress && a.stars === b.stars))
+const view = r => r ? { status: norm(r.status), progress: r.progress ?? 0, score: r.score ?? 0 } : null
+export const same = (a, b) => !a === !b && (!a || (a.status === b.status && a.progress === b.progress && a.score === b.score))
 
 // Kotakbase's state of one show as an entry; null when it has none. `show` (its details, if known) catches entries
 // saved before the `finished` flag existed, like the app's isFinished.
-export function localEntry (p, inList, stars = 0, show) {
-  if (!p) return inList ? { status: 'PLANNING', progress: 0, stars } : null
-  if (p.rewatch) return { status: 'COMPLETED', progress: Math.max(p.episode, show?.episodes ?? 0), stars } // rewatching: still completed
+export function localEntry (p, inList, score = 0, show) {
+  if (!p) return inList ? { status: 'PLANNING', progress: 0, score } : null
+  if (p.rewatch) return { status: 'COMPLETED', progress: Math.max(p.episode, show?.episodes ?? 0), score } // rewatching: still completed
   const ended = p.time >= (p.duration || 1) * 0.9 // its episode is watched too (the last one: the entry stays on it)
   // finished: false = imported from AniList as CURRENT with every episode watched, which stays CURRENT there
   const finished = p.finished ?? (show?.status === 'FINISHED' && show.episodes && p.episode >= show.episodes && ended)
-  return { status: finished ? 'COMPLETED' : p.hidden ? 'DROPPED' : 'CURRENT', progress: ended ? p.episode : p.episode - 1, stars }
+  return { status: finished ? 'COMPLETED' : p.hidden ? 'DROPPED' : 'CURRENT', progress: ended ? p.episode : p.episode - 1, score }
 }
 
 // What Kotakbase saves for an entry that came from AniList (not PLANNING: that's Your List). `p` is the progress entry
@@ -38,9 +37,9 @@ export function toLocal (e, p, episodes) {
 }
 
 // Pulling: what one show should become on both sides, from Kotakbase's entry, AniList's and AniList's as last synced
-// (base); null = leave both alone. Progress: the further side, never lowered. Status and stars: whichever side changed
+// (base); null = leave both alone. Progress: the further side, never lowered. Status and score: whichever side changed
 // since the last sync (so a drop or score changed on AniList's site comes here, and one made here goes there); with
-// no base, or both changed, the side further along (status) or here (stars).
+// no base, or both changed, the side further along (status) or here (score).
 export function merge (L, remote, base) {
   const R = view(remote)
   const B = view(base)
@@ -50,35 +49,35 @@ export function merge (L, remote, base) {
   const progress = Math.max(L.progress, R.progress)
   let status = pick('status', (R.progress > L.progress ? R : L).status)
   if (status === 'PLANNING' && progress) status = 'CURRENT'
-  return { status, progress, stars: pick('stars', L.stars || R.stars) }
+  return { status, progress, score: pick('score', L.score || R.score) }
 }
 
 // Pushing one show Kotakbase changed: the entry to save on AniList, 'delete', or null (nothing to send). Progress is
 // never lowered, and COMPLETED stays (replaying an earlier episode), except by an explicit "Mark unwatched" (unwatch).
-// live: AniList's entry right now (it may have moved on the site since base); status and stars unchanged here keep it.
+// live: AniList's entry right now (it may have moved on the site since base); status and score unchanged here keep it.
 export function pushTarget (L, base, unwatch = false, live = base) {
   const B = view(base)
   const R = view(live)
   let T
   if (!L) {
     if (!R) return null
-    if (unwatch) T = { status: 'PLANNING', progress: 0, stars: R.stars } // every episode unmarked: kept as planned, never deleted
+    if (unwatch) T = { status: 'PLANNING', progress: 0, score: R.score } // every episode unmarked: kept as planned, never deleted
     else return R.status === 'PLANNING' ? 'delete' : null // taken off Your List before starting it: the only delete
   } else if (!R || unwatch) T = L
   else {
     const keep = k => B && L[k] === B[k] ? R[k] : L[k]
-    T = { status: keep('status'), progress: Math.max(L.progress, R.progress), stars: keep('stars') }
+    T = { status: keep('status'), progress: Math.max(L.progress, R.progress), score: keep('score') }
     if (R.status === 'COMPLETED' && T.status === 'CURRENT') T.status = 'COMPLETED'
     if (T.status === 'PLANNING' && T.progress) T.status = 'CURRENT'
   }
   return same(T, R) ? null : T
 }
 
-// SaveMediaListEntry's arguments: PAUSED / REPEATING on AniList stay as they are; the score is sent only when the stars
-// changed, so a 75 set on AniList isn't rounded to 80
+// SaveMediaListEntry's arguments: PAUSED / REPEATING on AniList stay as they are; the score is sent only when it changed
+// (AniList keeps it in the user's own scoring format, so it may come back rounded)
 export function saveVars (mediaId, T, base) {
   const v = { mediaId, status: T.status === 'CURRENT' && norm(base?.status) === 'CURRENT' ? base.status : T.status, progress: T.progress }
-  if (T.stars !== toStars(base?.score)) v.scoreRaw = T.stars * 20
+  if (T.score !== (base?.score ?? 0)) v.scoreRaw = T.score
   return v
 }
 
@@ -122,9 +121,9 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
   function locals () {
     const progress = load('progress', {})
     const list = new Set(load('list', []))
-    const ratings = load('ratings', {})
-    const ids = new Set([...Object.keys(progress), ...Object.keys(ratings)].map(Number).concat([...list]))
-    return new Map([...ids].map(id => [id, localEntry(progress[id], list.has(id), ratings[id] ?? 0, show(id))]))
+    const scores = load('scores', {})
+    const ids = new Set([...Object.keys(progress), ...Object.keys(scores)].map(Number).concat([...list]))
+    return new Map([...ids].map(id => [id, localEntry(progress[id], list.has(id), scores[id] ?? 0, show(id))]))
   }
   const snapshot = now => { lastLocal = new Map([...now].map(([id, e]) => [id, JSON.stringify(e)])) }
 
@@ -165,6 +164,15 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
       const args = Object.keys(v)
       r = await native.query(`mutation(${args.map(k => `$${k}: ${TYPES[k]}`).join(', ')}) { SaveMediaListEntry(${args.map(k => `${k}: $${k}`).join(', ')}) { ${ENTRY_FIELDS} } }`, v)
       if (r.status === 200) b.entries[id] = fromApi(r.data.SaveMediaListEntry)
+      // a 73 on a 10-point AniList list is kept as 70: take that here too, or every sync would send 73 again
+      const kept = b.entries[id]?.score
+      if (r.status === 200 && kept !== T.score) {
+        const scores = load('scores', {})
+        if (kept) scores[id] = kept
+        else delete scores[id]
+        applying = true
+        try { save('scores', scores) } finally { applying = false }
+      }
     }
     if (r.status === 200) save(BASE, { ...b, at: Date.now() })
     return r
@@ -244,20 +252,20 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
   function apply (imports, remote) {
     const progress = load('progress', {})
     const list = load('list', [])
-    const ratings = load('ratings', {})
+    const scores = load('scores', {})
     for (const [id, T] of imports) {
-      const L = localEntry(progress[id], list.includes(id), ratings[id] ?? 0, show(id))
+      const L = localEntry(progress[id], list.includes(id), scores[id] ?? 0, show(id))
       if (T.status === 'PLANNING') { if (!list.includes(id)) list.push(id) } else if (progress[id]?.rewatch && T.status === 'COMPLETED') {
         // rewatching here: AniList still saying completed doesn't take the rewatch's progress back
       } else if (!L || L.status !== T.status || L.progress !== T.progress) {
         const e = remote.get(id)
         progress[id] = { ...toLocal(T, progress[id], e?.media?.episodes ?? show(id)?.episodes), at: Math.max(progress[id]?.at ?? 0, (e?.updatedAt ?? 0) * 1000) || Date.now() }
       }
-      if (T.stars) ratings[id] = T.stars
-      else delete ratings[id]
+      if (T.score) scores[id] = T.score
+      else delete scores[id]
     }
     applying = true
-    try { save('progress', progress); save('list', list); save('ratings', ratings) } finally { applying = false }
+    try { save('progress', progress); save('list', list); save('scores', scores) } finally { applying = false }
   }
 
   let syncing = null

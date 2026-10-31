@@ -22,7 +22,6 @@ export const EN = {
   '{n} episodes downloaded': { one: '{n} episode downloaded', other: '{n} episodes downloaded' },
   '{n} seeders': { one: '{n} seeder', other: '{n} seeders' },
   '{n} peers': { one: '{n} peer', other: '{n} peers' },
-  '{n} stars': { one: '{n} star', other: '{n} stars' },
   '{n} changes waiting': { one: '{n} change waiting', other: '{n} changes waiting' },
   "{n} changes haven't reached AniList yet and will be dropped.": { one: "{n} change hasn't reached AniList yet and will be dropped.", other: "{n} changes haven't reached AniList yet and will be dropped." }
 }

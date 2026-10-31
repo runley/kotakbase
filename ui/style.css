@@ -365,12 +365,10 @@ button.chip.genre:hover { background: var(--accent); color: var(--on-accent); }
 .hist time { color: var(--muted); font-size: .82em; }
 
 /* show page: your star rating */
-.stars { display: flex; align-items: center; gap: 2px; margin-left: 10px; font-size: 12px; }
-.stars span { margin-right: 6px; }
-.stars button { background: none; border: 0; padding: 0 1px; font-size: 18px; line-height: 1; color: #3a3a3a; }
-.stars button.on { color: var(--accent); }
-.stars:hover button { color: var(--accent); }
-.stars button:hover ~ button { color: #3a3a3a; }
+.my-score { display: flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 12px; }
+.my-score input { width: 64px; padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font: 700 14px Inter, system-ui, sans-serif; text-align: center; -moz-appearance: textfield; }
+.my-score input::-webkit-inner-spin-button, .my-score input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.my-score input:focus { border-color: var(--accent); outline: none; }
 
 /* right-click menu outside the player (episode cards) */
 .app-cm { width: auto; min-width: 220px; z-index: 50; }
