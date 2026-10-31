@@ -286,10 +286,31 @@ const surprise = kind => SURPRISE.includes(kind) ? `<button class="more surprise
 const seasonName = () => ['Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer', 'Summer', 'Summer', 'Fall', 'Fall', 'Fall', 'Winter'][new Date().getMonth()]
 const popularThis = () => ({ Winter: t('Popular this Winter'), Spring: t('Popular this Spring'), Summer: t('Popular this Summer'), Fall: t('Popular this Fall') })[seasonName()]
 const tile = () => `<a class="tile" href="#/more/season"><b>${popularThis()}</b><span>${t('The most-followed shows of the season')}</span><span class="tile-go">${t('View all →')}</span></a>`
-// a short row's empty end: a lime tile filling the rest of the width
-const fillTile = kind => ['continue', 'list'].includes(kind)
-  ? `<a class="tile fill" href="#/more/trending"><b>${t('Looking for more?')}</b><span>${t("See what everyone's watching right now")}</span><span class="tile-go">${t('Trending Now')} →</span></a>`
-  : ['recommended', 'because'].includes(kind) ? `<div class="tile fill"><b>${t('Sharper picks')}</b><span>${t('Score the shows you finish, and these get closer to your taste.')}</span></div>` : ''
+// a short row's empty end: a lime tile filling the rest of the width, with a quip taken in turn (so rows next to each
+// other differ), starting somewhere new each app start
+const PICK_QUIPS = [
+  () => [t('Sharper picks'), t('Score the shows you finish, and these get closer to your taste.')],
+  () => [t("That's all for now"), t('Finish a few more shows and this row grows.')],
+  () => [t('Your taste, mapped'), t('These come from the genres and tags of the shows you loved most.')],
+  () => [t('Not feeling one?'), t("Hit ✕ on it and it won't come back.")],
+  () => [t('Want more like these?'), t('Open any of them and check its Similar tab.')],
+  () => [t('Still learning you'), t('Every show you finish and score teaches these rows something new.')]
+]
+const MORE_QUIPS = [
+  () => [t('Looking for more?'), t("See what everyone's watching right now"), 'trending', `${t('Trending Now')} →`],
+  () => [t('Room for one more'), t("This season's most-followed shows are one click away"), 'season', t('View all →')],
+  () => [t('Need a new obsession?'), t('The all-time favorites are a good place to start'), 'popular', `${t('All Time Popular')} →`]
+]
+let quip = Math.floor(Math.random() * 60)
+function fillTile (kind) {
+  if (['continue', 'list'].includes(kind)) {
+    const [head, line, more, go] = MORE_QUIPS[quip++ % MORE_QUIPS.length]()
+    return `<a class="tile fill" href="#/more/${more}"><b>${head}</b><span>${line}</span><span class="tile-go">${go}</span></a>`
+  }
+  if (!['recommended', 'because'].includes(kind)) return ''
+  const [head, line] = PICK_QUIPS[quip++ % PICK_QUIPS.length]()
+  return `<div class="tile fill"><b>${head}</b><span>${line}</span></div>`
+}
 // "Because you watched…" rows have no "View More": the row is all of them
 const row = (name, list, kind) => list.length ? `<section class="row">${kind === 'season' ? '' : `<div class="row-head"><h2>${esc(name)}</h2>${kind === 'because' ? '' : `<span class="row-links">${surprise(kind)}<a class="more" href="#/more/${kind}">${t('View More')}</a></span>`}</div>`}<div class="cards">${kind === 'season' ? tile() : ''}${list.slice(0, ROW_LIMIT).map(m => card(m, { nope: kind === 'recommended' || kind === 'because' })).join('')}${list.length < ROW_LIMIT ? fillTile(kind) : ''}</div></section>` : ''
 
