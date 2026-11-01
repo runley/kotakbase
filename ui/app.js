@@ -1961,26 +1961,68 @@ async function route () {
 let navigation = 0
 window.onhashchange = route
 
-// Drag a row of cards sideways with the mouse; a drag doesn't count as a click on the card it ends on.
+// Drag to scroll with the mouse: a row of cards sideways, and in Steam's Game Mode (a finger arrives as a mouse there)
+// the page or a list up and down too. A flick coasts on after letting go; a drag doesn't count as a click on what it
+// ends on.
+const fingerIsMouse = !!window.native?.gameMode
+document.documentElement.classList.toggle('finger', fingerIsMouse)
+const scrollsY = el => {
+  for (; el && el !== document.body; el = el.parentElement) if (el.scrollHeight > el.clientHeight && /auto|scroll/.test(getComputedStyle(el).overflowY)) return el
+  return null
+}
 let drag = null
+let coast = 0
 document.addEventListener('pointerdown', e => {
-  const cards = e.pointerType === 'mouse' && e.button === 0 && e.target.closest('.cards')
-  if (cards) drag = { cards, x: e.clientX, left: cards.scrollLeft, moved: false }
+  if (e.pointerType !== 'mouse' || e.button !== 0) return
+  cancelAnimationFrame(coast)
+  const cards = e.target.closest('.cards')
+  const page = fingerIsMouse && scrollsY(e.target)
+  drag = (cards || page) && { cards, page, x: e.clientX, y: e.clientY, el: null }
 })
 document.addEventListener('pointermove', e => {
   if (!drag) return
-  const dx = e.clientX - drag.x
-  if (!drag.moved && Math.abs(dx) > 5) { drag.moved = true; drag.cards.classList.add('dragging') }
-  if (drag.moved) drag.cards.scrollLeft = drag.left - dx
+  if (!drag.el) {
+    const dx = e.clientX - drag.x
+    const dy = e.clientY - drag.y
+    if (Math.max(Math.abs(dx), Math.abs(dy)) <= 5) return
+    drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+    drag.el = drag.axis === 'x' ? drag.cards : drag.page
+    if (!drag.el) { drag = null; return }
+    drag.el.classList.add('dragging')
+    drag.pos = drag.axis === 'x' ? drag.x : drag.y
+    drag.at = e.timeStamp
+    drag.v = 0
+  } else if (!(e.buttons & 1)) return endDrag(e) // the release never arrived (it can get lost in Steam's Game Mode)
+  const pos = drag.axis === 'x' ? e.clientX : e.clientY
+  const step = drag.pos - pos
+  if (drag.axis === 'x') drag.el.scrollLeft += step
+  else drag.el.scrollTop += step
+  drag.v = 0.8 * step / Math.max(1, e.timeStamp - drag.at) + 0.2 * drag.v // px per ms, smoothed
+  drag.pos = pos
+  drag.at = e.timeStamp
 })
-document.addEventListener('pointerup', () => {
+const endDrag = e => {
   if (!drag) return
-  drag.cards.classList.remove('dragging')
-  const moved = drag.moved
+  if (!drag.el) { drag = null; return }
+  const { el, axis, at } = drag
+  el.classList.remove('dragging')
   setTimeout(() => { drag = null }) // after the click that follows pointerup
-  if (!moved) drag = null
-})
-document.addEventListener('click', e => { if (drag?.moved) { e.preventDefault(); e.stopPropagation() } }, true)
+  let v = e.type !== 'pointercancel' && e.timeStamp - at < 100 ? drag.v : 0 // a finger that stopped before letting go doesn't coast
+  let t = performance.now()
+  const glide = now => {
+    const dt = now - t
+    t = now
+    v *= 0.95 ** (dt / 16)
+    if (Math.abs(v) < 0.05) return
+    if (axis === 'x') el.scrollLeft += v * dt
+    else el.scrollTop += v * dt
+    coast = requestAnimationFrame(glide)
+  }
+  coast = requestAnimationFrame(glide)
+}
+document.addEventListener('pointerup', endDrag)
+document.addEventListener('pointercancel', endDrag)
+document.addEventListener('click', e => { if (drag?.el) { e.preventDefault(); e.stopPropagation() } }, true)
 // mouse back/forward buttons move through history; the full player is a history entry, so back docks it and forward restores it
 document.addEventListener('mouseup', e => {
   if (e.button === 3) { e.preventDefault(); history.back() }

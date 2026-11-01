@@ -343,6 +343,9 @@ button.chip.genre:hover { background: var(--accent); color: var(--on-accent); }
 .cards { cursor: grab; user-select: none; }
 .cards.dragging { cursor: grabbing; scroll-behavior: auto; }
 .cards img, .cards a { -webkit-user-drag: none; }
+/* Steam Deck Game Mode: a finger drag scrolls, so it shouldn't select text or pick up a link or picture */
+.finger body { user-select: none; }
+.finger img, .finger a { -webkit-user-drag: none; }
 
 /* chapters on the seek bar: a tick where each starts, opening/ending shaded */
 .p-chapters { position: absolute; inset: 0; pointer-events: none; }

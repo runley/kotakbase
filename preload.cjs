@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('native', {
   // MyAnimeList Client ID for the details fallback ('' = off); read once, it never changes while running
   malClientId: ipcRenderer.sendSync('mal-client-id'),
+  // Steam Deck's Game Mode, where a finger on the screen arrives as a mouse
+  gameMode: process.env.XDG_CURRENT_DESKTOP === 'gamescope',
   play: (link, episode, fileIndex, numbering, mpv) => ipcRenderer.invoke('play', link, episode, fileIndex, numbering, mpv),
   mpv: {
     available: () => ipcRenderer.invoke('mpv-available'),
