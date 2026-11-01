@@ -95,3 +95,12 @@ test('saved rooms: a 4 to 8 digit PIN, and a room name in hello', () => {
   assert.ok(!valid({ t: 'hello', name: 'Ann', since: 1, room: 'x'.repeat(41) }))
   assert.ok(!valid({ t: 'hello', name: 'Ann', since: 1, room: 5 }))
 })
+
+test('kick and ban: the host names who goes, with their device id for a ban', () => {
+  assert.ok(valid({ t: 'kick', id: 'abc' }))
+  assert.ok(valid({ t: 'kick', id: 'abc', device: crypto.randomUUID() }))
+  assert.ok(!valid({ t: 'kick' }))
+  assert.ok(!valid({ t: 'kick', id: 'abc', device: 'x'.repeat(65) }))
+  assert.ok(valid({ t: 'hello', name: 'Ann', since: Date.now(), device: crypto.randomUUID() }))
+  assert.ok(!valid({ t: 'hello', name: 'Ann', since: Date.now(), device: 5 }))
+})

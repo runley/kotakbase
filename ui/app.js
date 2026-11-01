@@ -1095,7 +1095,7 @@ function settingsPage () {
 
 // Backup: everything Kotakbase keeps, except the home-row caches (re-downloaded anyway) and AniList sync's own state
 // (tied to the sign-in, which isn't in the backup)
-const backupKeys = () => Object.keys(localStorage).filter(k => !k.startsWith('list:') && !k.startsWith('anilist') && k !== REC_POOL)
+const backupKeys = () => Object.keys(localStorage).filter(k => !k.startsWith('list:') && !k.startsWith('anilist') && k !== REC_POOL && k !== 'deviceId')
 function exportData () {
   const data = Object.fromEntries(backupKeys().map(k => [k, localStorage.getItem(k)]))
   const link = document.createElement('a')
@@ -1700,6 +1700,8 @@ const fileText = f => f.missing ? t('File missing') : f.done ? size(f.length) : 
 let room = null // the room you're in, if any
 let roomError = ''
 const roomName = () => load('roomName', '') || `${t('Guest')} ${Math.floor(100 + Math.random() * 900)}`
+// this install's random id: told to rooms so a ban there holds when you join again
+const deviceId = () => { if (!load('deviceId', '')) save('deviceId', crypto.randomUUID()); return load('deviceId') }
 
 // Saved rooms: a code and PIN kept on this device, newest first, so you can go back in without an invite
 const savedRooms = () => load('savedRooms', [])
@@ -1725,7 +1727,13 @@ async function enterRoom (code, saved = null) {
       onChange: drawRoom,
       onLoad: followHost,
       // others' messages pop up over the video too
-      onChat: msg => { if (!msg.mine && player.current()) player.roomMessage(msg.name, msg.text) }
+      onChat: msg => { if (!msg.mine && player.current()) player.roomMessage(msg.name, msg.text) },
+      device: deviceId(),
+      onRemoved: banned => {
+        leaveRoom()
+        roomError = banned ? t('The host banned you from this room.') : t('The host removed you from the room.')
+        drawRoom()
+      }
     })
     if (!code && !saved) room.claim()
   } catch (e) {
@@ -1828,7 +1836,7 @@ function togetherPage () {
             <span class="avatar" aria-hidden="true">${esc((p.known === false ? '?' : p.name.trim()[0] || '?').toUpperCase())}</span>
             <span class="person"><b>${esc(p.known === false ? t('Someone') : p.name)}${p === room.me ? ` <span class="muted">${t('(you)')}</span>` : ''}</b>${status(p) ? `<span class="muted">${status(p)}</span>` : ''}</span>
             ${p.id === room.host ? `<span class="badge host">${t('Host')}</span>` : ''}
-            ${room.isHost() && p !== room.me && p.known ? `<button class="btn ghost" data-host="${esc(p.id)}">${t('Make host')}</button>` : ''}
+            ${room.isHost() && p !== room.me && p.known ? `<span class="person-actions"><button class="btn ghost" data-host="${esc(p.id)}">${t('Make host')}</button><button class="btn ghost" data-kick="${esc(p.id)}">${t('Kick')}</button>${p.device ? `<button class="btn ghost" data-ban="${esc(p.id)}">${t('Ban')}</button>` : ''}</span>` : ''}
           </li>`).join('')}</ul>
           ${nameField}
         </div>
@@ -1864,7 +1872,15 @@ function togetherPage () {
     }
     if (e.target.closest('[data-rejoin]')) return room.load && followHost(room.load)
     const h = e.target.closest('[data-host]')
-    if (h) room.makeHost(h.dataset.host)
+    if (h) return room.makeHost(h.dataset.host)
+    const kick = e.target.closest('[data-kick]')
+    if (kick) return room.kick(kick.dataset.kick)
+    const ban = e.target.closest('[data-ban]')
+    const who = ban && room.members().find(p => p.id === ban.dataset.ban)
+    if (who) {
+      ask(t('Ban {name}?', { name: esc(who.name) }), `<p>${t("They're removed from the room and can't join it again while anyone here now is still in it.")}</p>`, t('Ban'), t('Cancel'))
+        .then(yes => { if (yes) room?.kick(who.id, true) })
+    }
   }
   $app.onchange = e => {
     if (e.target.dataset.field !== 'name') return

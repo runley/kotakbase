@@ -37,10 +37,11 @@ export function validLoad (l) {
 export function valid (m) {
   if (!m || typeof m !== 'object') return false
   switch (m.t) {
-    case 'hello': return str(m.name, 40) && Number.isSafeInteger(m.since) && m.since > 0 && m.since < Date.now() + 864e5 && (m.host == null || str(m.host, 40)) && (m.room == null || str(m.room, 40))
+    case 'hello': return str(m.name, 40) && Number.isSafeInteger(m.since) && m.since > 0 && m.since < Date.now() + 864e5 && (m.host == null || str(m.host, 40)) && (m.room == null || str(m.room, 40)) && (m.device == null || str(m.device, 64))
     case 'state': return typeof m.paused === 'boolean' && num(m.time) && (m.load == null || validLoad(m.load))
     case 'control': return typeof m.paused === 'boolean' && num(m.time)
     case 'host': return str(m.id, 40)
+    case 'kick': return str(m.id, 40) && (m.device == null || str(m.device, 64))
     case 'chat': return str(m.text, 300) && m.text.trim().length > 0
     case 'status': return typeof m.buffering === 'boolean' && (m.key == null || str(m.key, 5000))
     default: return false
@@ -67,11 +68,12 @@ export const loadKey = l => l ? JSON.stringify([l.mediaId, l.episode, l.link, l.
 
 /**
  * Creates (no code) or joins a room. getPlayer() → { video, buffering } | null for what's playing here;
- * onLoad(load) plays what the host picked; onChange() redraws.
+ * onLoad(load) plays what the host picked; onChange() redraws; onRemoved(banned) when the host takes you out of the room.
+ * device: this install's own id, so a ban holds when someone joins again.
  * A saved room has a PIN (only those who know it meet there), a title it tells others, and no fixed host: whoever is
  * there first hosts it.
  */
-export async function openRoom ({ code = newCode(), pin = null, title = null, name, getPlayer, onLoad, onChange, onChat = () => {}, onTitle = () => {} }) {
+export async function openRoom ({ code = newCode(), pin = null, title = null, name, device = null, getPlayer, onLoad, onChange, onChat = () => {}, onTitle = () => {}, onRemoved = () => {} }) {
   const me = { id: null, name, since: Date.now() }
   const members = new Map() // id -> { id, name, since, channel, buffering, key }
   let host = null
@@ -86,6 +88,14 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
   let myStatus = ''
   let closed = false
   let problem = ''
+  // Kicked and banned members: everyone in the room disconnects them; a ban also turns away their device (their app's
+  // id) for as long as anyone who saw it is in the room. Their own app leaves when told. shortcut: an app changed to
+  // send another device id gets back in; a fresh code (or PIN) is the real lock
+  const bans = new Set()
+  const remove = (id, device) => {
+    if (device) bans.add(device)
+    setTimeout(() => connection.block(id), isHost() ? 1000 : 0) // the host's own message reaches them first
+  }
   const chat = [] // { name, text, at, mine }, newest last
   const addChat = (from, text, mine) => {
     chat.push({ name: from, text, at: Date.now(), mine })
@@ -136,13 +146,18 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
     }
     if (m.t === 'hello') {
       // since is what elects the host: once said, a member can't move it earlier (renaming says hello again)
-      Object.assign(peer, { name: m.name, since: peer.known ? peer.since : m.since, known: true })
+      Object.assign(peer, { name: m.name, since: peer.known ? peer.since : m.since, known: true, device: m.device ?? null })
+      if (peer.device && bans.has(peer.device)) {
+        if (isHost()) send(peer.channel, { t: 'kick', id: from, device: peer.device })
+        return remove(from)
+      }
       if (m.room && pin && !title) { title = m.room; onTitle(title) } // joined with just the code and PIN: learn its name
       const next = hostAfterHello(host, m.host, id => id === from || id === me.id || members.has(id), () => electHost(known()))
       if (next !== host) setHost(next)
       return changed()
     }
     if (m.t === 'host' && from === host && (m.id === me.id || members.has(m.id))) return setHost(m.id)
+    if (m.t === 'kick' && from === host) return m.id === me.id ? onRemoved(!!m.device) : remove(m.id, m.device)
     if (m.t === 'chat') return addChat(peer.known ? peer.name : tr('Someone'), m.text.trim(), false)
     if (m.t === 'status') {
       if (m.buffering && (!peer.buffering || m.key !== peer.key)) peer.bufferingSince = Date.now()
@@ -205,7 +220,7 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
     if (status !== myStatus && !isHost()) { myStatus = status; broadcast({ t: 'status', buffering, key: open ? loadKey(load) : null }) }
   }
 
-  const hello = () => ({ t: 'hello', name: me.name, since: me.since, host, room: pin ? title : null })
+  const hello = () => ({ t: 'hello', name: me.name, since: me.since, host, room: pin ? title : null, device })
   const connection = await joinRoom(pin ? `${code}:${pin}` : code, {
     onOpen (id, channel) {
       const peer = { id, name: tr('Connecting…'), since: Infinity, channel, buffering: false, key: null, known: false }
@@ -246,6 +261,13 @@ export async function openRoom ({ code = newCode(), pin = null, title = null, na
     // the room was just created here: you're its host
     claim () { setHost(me.id) },
     makeHost (id) { if (isHost() && members.has(id)) { broadcast({ t: 'host', id }); setHost(id) } },
+    // the host takes someone out of the room; ban: their device can't come back in either
+    kick (id, ban = false) {
+      if (!isHost() || !members.has(id)) return
+      const device = ban ? members.get(id).device ?? undefined : undefined
+      broadcast({ t: 'kick', id, device })
+      remove(id, device)
+    },
     // this device started playing something: as host, that's what the room watches now
     played (l) {
       if (!isHost()) return

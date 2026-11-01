@@ -31,7 +31,7 @@ async function gathered (pc) {
 
 /**
  * Joins the room `code`. Calls onOpen(peerId, channel) once a member is connected (their data channel is open) and
- * onClose(peerId) when they're gone. Returns { id, leave(), status() }.
+ * onClose(peerId) when they're gone. Returns { id, block(peerId), leave() }.
  */
 export async function joinRoom (code, { onOpen, onClose, onStatus = () => {} }) {
   const id = randomId()
@@ -39,6 +39,7 @@ export async function joinRoom (code, { onOpen, onClose, onStatus = () => {} }) 
   const peers = new Map() // peerId -> { pc, channel, open }
   const offers = new Map() // offerId -> { pc, channel, timer }
   const sockets = new Map() // url -> WebSocket
+  const blocked = new Set() // peer ids removed from the room: never connected to again
   let left = false
   let timer
   let soonTimer
@@ -84,7 +85,7 @@ export async function joinRoom (code, { onOpen, onClose, onStatus = () => {} }) 
   }
 
   async function onMessage (ws, data) {
-    if (left || data.action !== 'announce' || data.info_hash !== infoHash || !data.peer_id || data.peer_id === id) return
+    if (left || data.action !== 'announce' || data.info_hash !== infoHash || !data.peer_id || data.peer_id === id || blocked.has(data.peer_id)) return
     const from = data.peer_id
     if (data.offer && typeof data.offer.sdp === 'string') {
       // one connection per pair: the member with the smaller id makes the offer the other one takes
@@ -126,6 +127,8 @@ export async function joinRoom (code, { onOpen, onClose, onStatus = () => {} }) 
 
   return {
     id,
+    // disconnect a member and ignore them from now on (kicked or banned)
+    block (peerId) { blocked.add(peerId); drop(peerId) },
     leave () {
       left = true
       clearInterval(timer)
