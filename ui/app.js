@@ -1144,11 +1144,19 @@ const aniZip = id => {
   return zipCache.get(id).promise
 }
 
+// whether a show continues another (a season 2, a part 2); unknown counts as yes, which changes nothing
+const hasPrequel = id => once('prequel' + id, () =>
+  anilist('query($id: Int) { Media(id: $id) { relations { edges { relationType node { type } } } } }', { id })
+    .then(d => d.Media.relations.edges.some(e => e.relationType === 'PREQUEL' && e.node.type === 'ANIME'), () => true))
+
 async function mappings (id, episode) {
   try {
     const res = await aniZip(id)
-    const ep = res.episodes?.[episode] ?? {}
+    let ep = res.episodes?.[episode] ?? {}
     const mp = res.mappings ?? {}
+    // A franchise's first season starts at episode 1. An offset there is the database counting an extra TVDB episode
+    // (Food Wars: episode 1 mapped to S01E02), so its own number is used, and no TVDB episode id
+    if (ep.seasonNumber === 1 && ep.absoluteEpisodeNumber !== episode && !await hasPrequel(id)) ep = { ...ep, absoluteEpisodeNumber: episode, episodeNumber: episode, tvdbId: undefined }
     return { anidbAid: mp.anidb_id, anidbEid: ep.anidbEid, tvdbId: mp.thetvdb_id, tvdbEId: ep.tvdbId, imdbId: mp.imdb_id, tmdbId: mp.themoviedb_id, malId: mp.mal_id, kitsuId: mp.kitsu_id, absoluteEpisodeNumber: ep.absoluteEpisodeNumber, tvdbSeason: ep.seasonNumber, tvdbSeasonEpisode: ep.episodeNumber }
   } catch { return {} }
 }

@@ -71,6 +71,13 @@ test('a recap numbered NN.5 is not episode NN', () => {
   assert.equal(findEpisode([{ name: 'Show - 05.5.mkv' }], 5), null)
 })
 
+test('the series-wide number skips files naming another season', () => {
+  // a pack of several seasons where a later season's folder sorts first: Food Wars S1 episode 2 is S01E02
+  const pack = [4, 1, 3].flatMap(s => Array.from({ length: 3 }, (_, i) => ({ name: `${s === 1 ? 'Shokugeki' : 'Food Wars Plate ' + s}/Food.Wars!.S0${s}E0${i + 1}.mkv` })))
+  assert.equal(findEpisode(pack, 2, { abs: 2, tvdbSeason: 1, tvdbSeasonEpisode: 2 }).name, 'Shokugeki/Food.Wars!.S01E02.mkv')
+  assert.equal(pickFile(pack, 1, { abs: 1, tvdbSeason: 1, tvdbSeasonEpisode: 1 }).name, 'Shokugeki/Food.Wars!.S01E01.mkv')
+})
+
 test('a per-season pack named "Season 2 - NN" plays its own episode 1, not the series-wide number', () => {
   const ids = { abs: 13, tvdbSeason: 2, tvdbSeasonEpisode: 1 }
   const pack = Array.from({ length: 13 }, (_, i) => ({ name: `Show Season 2 - ${String(i + 1).padStart(2, '0')}.mkv` }))
