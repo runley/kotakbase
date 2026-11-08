@@ -8,6 +8,8 @@ import { openRoom, parseCode, formatCode, inviteLink, newCode, validPin } from '
 import { t, setLanguage, pickLanguage, language, LANGUAGES } from './i18n.js'
 import { STATS_QUERY, SAMPLE, sampleHistory, crowd, habits } from './stats.js'
 import { rank, diverse, taste } from './recommend.js'
+import { pickSeries, chapterRows, titlesOf } from './manga.js'
+import { openReader } from './reader.js'
 
 
 const $app = document.getElementById('app')
@@ -51,7 +53,7 @@ window.native.setLanguage(language())
 
 // ---- AniList ----
 const FIELDS = `id idMal type title { romaji english native userPreferred } synonyms coverImage { large extraLarge color } bannerImage
-  description(asHtml: false) episodes chapters volumes format status season seasonYear averageScore genres duration
+  description(asHtml: false) episodes chapters volumes countryOfOrigin format status season seasonYear averageScore genres duration
   nextAiringEpisode { episode } startDate { year month day } tags { name rank isMediaSpoiler }`
 // Just what cards and the home hero show, for long lists (home rows, View More, search): a top-100 list with
 // descriptions and tags is several times bigger. The show page and anything needing the rest fetch FIELDS (see full).
@@ -376,7 +378,7 @@ function mangaBox (m, p) {
       <p class="muted">${p ? t('Chapter {n}', { n: ch }) : esc(about)}</p>
       ${p && total < Infinity ? `<div class="meter" aria-hidden="true"><i style="width:${Math.min(100, (ch - 1) / total * 100)}%"></i></div>` : ''}
       <div class="actions">
-        ${p ? `<button class="btn" data-read="${m.id}">${t('Mark chapter {n} read', { n: ch })}</button>` : ''}
+        ${!p ? '' : ext.hasManga() ? `<button class="btn" data-read-ch="${m.id}">${t('Read chapter {n}', { n: ch })}</button>` : `<button class="btn" data-read="${m.id}">${t('Mark chapter {n} read', { n: ch })}</button>`}
         <a class="btn ${p ? 'ghost' : ''}" href="${showHref(m)}">${t('Details')}</a>
         ${listButton(m, 'sq')}
       </div>
@@ -997,7 +999,7 @@ async function detail (id) {
 async function mangaDetail (id) {
   const m = await media(id)
   const p = progress()[id]
-  const read = p ? p.episode - (p.time >= p.duration * 0.9 ? 0 : 1) : 0 // chapters done: the one you're on isn't, unless it's the last
+  const read = chaptersRead(m)
   const total = epCount(m)
   const status = STATUS[m.status] ? t(STATUS[m.status]) : (m.status ?? '')
   const count = total < Infinity ? `${read} / ${total}` : String(read)
@@ -1019,14 +1021,15 @@ async function mangaDetail (id) {
       </div>
     </div>
     <div class="show-actions">
-      ${read < total ? `<button class="btn" data-read="${m.id}">${t('Mark chapter {n} read', { n: read + 1 })}</button>` : ''}
+      ${read >= total ? '' : ext.hasManga() ? `<button class="btn" data-read-ch="${m.id}">${t('Read chapter {n}', { n: read + 1 })}</button>` : `<button class="btn" data-read="${m.id}">${t('Mark chapter {n} read', { n: read + 1 })}</button>`}
       ${listButton(m, 'sq')}
       <label class="my-score"><span class="muted">${t('Chapters read')}</span><input type="number" min="0" ${total < Infinity ? `max="${total}"` : ''} step="1" inputmode="numeric" data-chapters value="${read}" aria-label="${t('Chapters read')}"></label>
       ${p ? ratingInput(m) : ''}
     </div>
     <div class="chips">${m.genres.map(g => `<button class="chip genre" data-genre="${esc(g)}">${esc(t(g))}</button>`).join('')}</div>
-    <div class="tabbar"><button class="on" data-tab="related">${t('Related')}</button><button data-tab="similar">${t('Similar')}</button></div>
-    <div class="grid" data-panel="related"></div>
+    <div class="tabbar"><button class="on" data-tab="chapters">${t('Chapters')}</button><button data-tab="related">${t('Related')}</button><button data-tab="similar">${t('Similar')}</button></div>
+    <div class="chapters" data-panel="chapters"></div>
+    <div class="grid" data-panel="related" hidden></div>
     <div class="grid" data-panel="similar" hidden></div>
   </div>`
   sharpen($app.querySelector('.show-banner'), m.id)
@@ -1038,16 +1041,26 @@ async function mangaDetail (id) {
     if (grid.dataset.loaded) return
     grid.dataset.loaded = 1
     grid.innerHTML = `<p class="muted">${t('Loading…')}</p>`
+    if (tab === 'chapters') return chapterList(m, grid).then(c => { reading = c }, err => { delete grid.dataset.loaded; grid.innerHTML = `<p class="err">${esc(err.message)}</p>` })
     ;({ similar, related })[tab](m.id).then(list => { grid.innerHTML = list.map(card).join('') || `<p class="muted">${t('Nothing here yet.')}</p>` },
       err => { delete grid.dataset.loaded; grid.innerHTML = `<p class="err">${esc(err.message)}</p>` })
   }
-  showTab(history.state?.tab === 'similar' ? 'similar' : 'related')
+  let reading = null // the chapter list's { series, rows, results }, once drawn
+  showTab(['related', 'similar'].includes(history.state?.tab) ? history.state.tab : 'chapters')
   $app.onchange = e => {
     if (e.target.matches('[data-rate]')) {
       const n = toScore(e.target.value)
       const { [m.id]: old, ...rest } = scores()
       if (n !== (old ?? 0)) save(K('scores'), n ? { ...rest, [m.id]: n } : rest)
       return e.target.closest('.my-score').replaceWith(document.createRange().createContextualFragment(ratingInput(m)))
+    }
+    if (e.target.matches('[data-series]')) { // "Source": the right series, picked by hand, kept for next time
+      const r = reading.results[e.target.value]
+      if (!r) return
+      save('mangaSources', { ...load('mangaSources', {}), [m.id]: { ext: r.ext, id: r.id } })
+      const grid = $app.querySelector('[data-panel="chapters"]')
+      delete grid.dataset.loaded
+      return showTab('chapters')
     }
     if (!e.target.matches('[data-chapters]')) return
     const n = Math.max(0, Math.min(total, Math.round(Number(e.target.value)) || 0))
@@ -1058,6 +1071,8 @@ async function mangaDetail (id) {
   $app.onclick = e => {
     const tab = e.target.closest('[data-tab]')?.dataset.tab
     if (tab) return showTab(tab)
+    const ch = e.target.closest('[data-chapter]')
+    if (ch) return readChapter(m, reading.series, reading.rows, +ch.dataset.chapter)
     const chip = e.target.closest('[data-genre]')
     if (chip) {
       history.replaceState({ ...history.state, scroll: $app.scrollTop }, '')
@@ -1065,6 +1080,75 @@ async function mangaDetail (id) {
       return route()
     }
   }
+}
+
+// ---- reading manga, from manga extensions ----
+// chapters done: the one you're on isn't, unless it's the last one there is
+const chaptersRead = m => { const p = progress()[m.id]; return p ? p.episode - (p.time >= p.duration * 0.9 ? 0 : 1) : 0 }
+// the languages to read in: Settings' subtitle languages, as 2-letter codes
+const readLangs = () => [...new Set(player.langPrefs('subLangs').map(k => LANGS[k]?.[1]).filter(Boolean))]
+// a manga's matches in your manga extensions, asked once per app start: { results, errors }
+const seriesSearch = m => once('series' + m.id, () => ext.mangaSearch({ titles: titlesOf(m), anilistId: m.id, malId: m.idMal ?? null }))
+// the series to read it from: the one picked by hand, else the one that's clearly it; null when there's none
+async function seriesFor (m) {
+  const { results } = await seriesSearch(m)
+  const picked = load('mangaSources', {})[m.id]
+  return results.find(r => r.ext === picked?.ext && r.id === picked?.id) ?? pickSeries(m, results)
+}
+const chaptersOf = series => once('chapters' + series.ext + series.id, () => ext.mangaChapters(series.ext, series.id, readLangs()).then(list => chapterRows(list, readLangs())))
+
+// The manga page's Chapters tab, drawn into el: the source picker, then a row per chapter; returns what was drawn
+async function chapterList (m, el) {
+  if (!ext.hasManga()) { el.innerHTML = `<p class="muted">${t('No manga extensions enabled. Add one in Extensions.')}</p>`; return null }
+  const { results, errors } = await seriesSearch(m)
+  const series = await seriesFor(m)
+  const picker = results.length
+    ? `<label class="ch-src"><span class="muted">${t('Source')}</span><select data-series>${series ? '' : `<option value="">${t('Pick the right series')}</option>`}${results.map((r, i) => `<option value="${i}" ${r === series ? 'selected' : ''}>${esc(r.title)} · ${esc(r.extName)}</option>`).join('')}</select></label>`
+    : ''
+  if (!series) {
+    el.innerHTML = picker + `<p class="muted">${results.length ? t('Pick the right series') : t('None of your manga extensions has this manga.')}</p>${errors.map(x => `<p class="err">${esc(x)}</p>`).join('')}`
+    return { results }
+  }
+  const rows = await chaptersOf(series)
+  const read = chaptersRead(m)
+  const next = rows.findIndex(r => r.number != null && r.number > read)
+  el.innerHTML = picker + (rows.map((r, i) => `<button class="ch-row ${r.number != null && r.number <= read ? 'read' : ''} ${i === next ? 'next' : ''}" data-chapter="${i}">
+      <b>${r.number != null ? t('Chapter {n}', { n: r.number }) : esc(r.title || '—')}</b><span>${r.number != null ? esc(r.title) : ''}</span><span class="muted">${esc(r.group)}</span></button>`).join('') ||
+    `<p class="muted">${t('Nothing here yet.')}</p>`)
+  return { series, rows, results }
+}
+
+// Opens the reader on rows[i]. Reaching a chapter's end counts it read (never lowers your progress: 10.5 counts as 10).
+function readChapter (m, series, rows, i) {
+  let changed = false
+  openReader({
+    title: title(m),
+    chapters: rows,
+    index: i,
+    loadPages: row => ext.mangaPages(series.ext, row.id),
+    // Korean and Chinese comics are mostly webtoons, read as one long strip; Japanese manga reads right to left
+    mode: load('readerMode', {})[m.id] ?? (['KR', 'CN', 'TW'].includes(m.countryOfOrigin) ? 'vertical' : 'rtl'),
+    onMode: mode => save('readerMode', { ...load('readerMode', {}), [m.id]: mode }),
+    onRead: row => {
+      const n = Math.floor(row.number ?? 0)
+      if (n <= chaptersRead(m)) return
+      markWatched(m, n)
+      logWatched(m, n, n >= epCount(m))
+      changed = true
+    },
+    onClose: () => { if (changed) { history.replaceState({ ...history.state, scroll: $app.scrollTop }, ''); route() } }
+  })
+}
+// "Read chapter n" (home, the manga page): the first chapter numbered n there is, or the one after it
+async function readFrom (m, n) {
+  try {
+    const series = await seriesFor(m)
+    if (!series) { notice(t('None of your manga extensions has this manga.')); location.hash = showHref(m); return }
+    const rows = await chaptersOf(series)
+    const i = rows.findIndex(r => r.number != null && r.number >= n)
+    if (i < 0) return notice(t('Nothing here yet.'))
+    readChapter(m, series, rows, i)
+  } catch (e) { notice(e.message) }
 }
 
 // A small right-click menu of [label, action] items; `after` runs once an item was picked
@@ -1095,7 +1179,7 @@ function contextMenu (e, items, after) {
 
 async function extensionsPage () {
   await ext.ready.catch(() => {})
-  const list = Object.values(ext.configs)
+  const list = Object.values(ext.configs).filter(c => (c.type === 'manga') === manga)
   $app.innerHTML = `<div class="page">
     <h2>${t('Extensions')}</h2>
     <p class="muted">${t('Paste a Hayase extension manifest URL (https://…/index.json, gh:user/repo or npm:package).')}</p>
@@ -1109,7 +1193,7 @@ async function extensionsPage () {
         <div class="grow">
           <b>${esc(c.name)}</b> <span class="muted">v${esc(c.version)} · ${esc(c.type)} · ${esc(c.media ?? '')} · ${t('{level} accuracy', { level: esc(t(c.accuracy)) })}</span>${c.deprecated ? `<span class="badge">${t('Deprecated')}</span>` : ''}
           <div class="muted">${esc(c.description ?? '')}</div>
-          ${c.type !== 'torrent' ? `<div class="muted">${t('Only torrent extensions are used by Kotakbase.')}</div>` : ''}
+          ${c.type !== 'torrent' && c.type !== 'manga' ? `<div class="muted">${t('Only torrent extensions are used by Kotakbase.')}</div>` : ''}
           ${Object.entries(c.options ?? {}).map(([k, o]) => `<label>${esc(o.description ?? k)}
             ${o.type === 'boolean'
               ? `<input type="checkbox" data-opt="${esc(c.id)}" data-key="${esc(k)}" ${(s.options[k] ?? o.default) ? 'checked' : ''}>`
@@ -2061,6 +2145,8 @@ document.addEventListener('click', e => {
   }
   const s = e.target.closest('[data-surprise]')
   if (s) return MORE[s.dataset.surprise][1]().then(list => { if (list.length) location.hash = showHref(list[Math.floor(Math.random() * list.length)]) })
+  const rc = e.target.closest('[data-read-ch]')
+  if (rc) { const id = +rc.dataset.readCh; return media(id).then(m => readFrom(m, chaptersRead(m) + 1)) } // full details: the reader needs every title
   const r = e.target.closest('[data-read]')
   if (r) {
     const m = cache.get(+r.dataset.read)
@@ -2078,7 +2164,7 @@ document.addEventListener('click', e => {
 async function route () {
   const [, name, id] = location.hash.split('/')
   // a page of the other mode (Back across a switch, a notification, an invite) switches to it
-  if (manga && ['anime', 'schedule', 'stats', 'extensions', 'together', 'downloads'].includes(name)) setMode(false, false)
+  if (manga && ['anime', 'schedule', 'stats', 'together', 'downloads'].includes(name)) setMode(false, false)
   if (!manga && name === 'manga' && !setMode(true, false)) return history.replaceState(null, '', '#/'), route()
   document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === (name || 'home')))
   $app.onclick = null

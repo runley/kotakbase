@@ -1,6 +1,7 @@
 // Runs one extension's code, isolated from the page. Same contract as Hayase extensions:
-// the module's default export has test(), single(), batch(), movie().
-import { clean } from './ext-clean.js'
+// the module's default export has test(), single(), batch(), movie(). Manga extensions: test(), search(), chapters(), pages().
+import { clean, cleanSeries, cleanChapters, cleanPages } from './ext-clean.js'
+const CLEAN = { search: cleanSeries, chapters: cleanChapters, pages: cleanPages }
 let mod
 
 self.onmessage = async ({ data: { id, fn, args } }) => {
@@ -14,7 +15,7 @@ self.onmessage = async ({ data: { id, fn, args } }) => {
       res = await mod.test()
     } else {
       const [query, options] = args
-      res = clean(await mod[fn]({ ...query, fetch: self.fetch.bind(self) }, options))
+      res = (CLEAN[fn] ?? clean)(await mod[fn]({ ...query, fetch: self.fetch.bind(self) }, options))
     }
     self.postMessage({ id, res })
   } catch (e) {

@@ -567,5 +567,17 @@ export default {
   "Search manga": "Пошук манґи",
   "Search manga…": "Пошук манґи…",
   "Switch to anime": "Перейти до аніме",
-  "Switch to manga": "Перейти до манґи"
+  "Switch to manga": "Перейти до манґи",
+  "Left to right": "Зліва направо",
+  "Next chapter": "Наступний розділ",
+  "No manga extensions enabled. Add one in Extensions.": "Немає ввімкнених розширень для манґи. Додайте їх у розділі «Розширення».",
+  "None of your manga extensions has this manga.": "Жодне з ваших розширень для манґи не має цієї манґи.",
+  "Page {n} / {total}": "Сторінка {n} / {total}",
+  "Pick the right series": "Виберіть правильну серію",
+  "Previous chapter": "Попередній розділ",
+  "Read chapter {n}": "Читати розділ {n}",
+  "Reading mode": "Режим читання",
+  "Right to left": "Справа наліво",
+  "Source": "Джерело",
+  "Vertical": "Вертикально"
 }

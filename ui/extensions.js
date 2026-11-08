@@ -1,6 +1,6 @@
 // Hayase-compatible extension manager: same manifest JSON, same gh:/npm:/http URL rules, same source API.
 import { t } from './i18n.js'
-import { clean } from './ext-clean.js'
+import { clean, cleanSeries, cleanChapters, cleanPages } from './ext-clean.js'
 const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
 const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
 
@@ -152,3 +152,27 @@ export async function search (query, { movie, batch }, onUpdate) {
   }
   return { results: rank(results), errors }
 }
+
+// ---- manga extensions (type "manga"): search({ titles, anilistId, malId }), chapters({ id, langs }), pages({ id }) ----
+const optionsOf = id => ({ ...Object.fromEntries(Object.entries(configs[id].options ?? {}).map(([k, o]) => [k, o.default])), ...settings[id].options })
+const mangaIds = () => Object.keys(configs).filter(id => configs[id].type === 'manga' && settings[id]?.enabled)
+export const hasManga = () => mangaIds().length > 0
+const callManga = async (id, fn, query, clean) => {
+  await ready
+  const w = workers.get(id)
+  if (!w || !settings[id]?.enabled) throw new Error(t('No manga extensions enabled. Add one in Extensions.'))
+  return clean(await timeout(w.call(fn, query, optionsOf(id)), 30000, 'timed out')) // cleaned again: see ext-clean.js
+}
+
+// Every enabled manga extension's matches, each tagged with its extension; errors: the ones that failed
+export async function mangaSearch (query) {
+  await ready
+  const ids = mangaIds()
+  if (!ids.length) throw new Error(t('No manga extensions enabled. Add one in Extensions.'))
+  const errors = []
+  const lists = await Promise.all(ids.map(id => callManga(id, 'search', query, cleanSeries)
+    .then(list => list.map(s => ({ ...s, ext: id, extName: configs[id].name })), e => { errors.push(`${configs[id].name}: ${e.message}`); return [] })))
+  return { results: lists.flat(), errors }
+}
+export const mangaChapters = (ext, id, langs) => callManga(ext, 'chapters', { id, langs }, cleanChapters)
+export const mangaPages = (ext, id) => callManga(ext, 'pages', { id }, cleanPages)

@@ -522,5 +522,17 @@ export default {
   "Search manga": "マンガを検索",
   "Search manga…": "マンガを検索…",
   "Switch to anime": "アニメに切り替え",
-  "Switch to manga": "マンガに切り替え"
+  "Switch to manga": "マンガに切り替え",
+  "Left to right": "左から右",
+  "Next chapter": "次の話",
+  "No manga extensions enabled. Add one in Extensions.": "有効なマンガ拡張機能がありません。拡張機能で追加してください。",
+  "None of your manga extensions has this manga.": "このマンガがあるマンガ拡張機能はありません。",
+  "Page {n} / {total}": "{n} / {total}ページ",
+  "Pick the right series": "正しい作品を選んでください",
+  "Previous chapter": "前の話",
+  "Read chapter {n}": "第{n}話を読む",
+  "Reading mode": "読み方",
+  "Right to left": "右から左",
+  "Source": "ソース",
+  "Vertical": "縦スクロール"
 }

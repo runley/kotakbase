@@ -522,5 +522,17 @@ export default {
   "Search manga": "Манга іздеу",
   "Search manga…": "Манга іздеу…",
   "Switch to anime": "Анимеге ауысу",
-  "Switch to manga": "Мангаға ауысу"
+  "Switch to manga": "Мангаға ауысу",
+  "Left to right": "Солдан оңға",
+  "Next chapter": "Келесі тарау",
+  "No manga extensions enabled. Add one in Extensions.": "Манга кеңейтімі қосылмаған. Кеңейтімдер бөлімінде қосыңыз.",
+  "None of your manga extensions has this manga.": "Манга кеңейтімдеріңіздің ешқайсысында бұл манга жоқ.",
+  "Page {n} / {total}": "{n} / {total} бет",
+  "Pick the right series": "Дұрыс серияны таңдаңыз",
+  "Previous chapter": "Алдыңғы тарау",
+  "Read chapter {n}": "{n}-тарауды оқу",
+  "Reading mode": "Оқу режимі",
+  "Right to left": "Оңнан солға",
+  "Source": "Дереккөз",
+  "Vertical": "Тігінен"
 }

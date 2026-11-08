@@ -522,5 +522,17 @@ export default {
   "Search manga": "Поиск манги",
   "Search manga…": "Поиск манги…",
   "Switch to anime": "Перейти к аниме",
-  "Switch to manga": "Перейти к манге"
+  "Switch to manga": "Перейти к манге",
+  "Left to right": "Слева направо",
+  "Next chapter": "Следующая глава",
+  "No manga extensions enabled. Add one in Extensions.": "Нет включённых расширений для манги. Добавьте их в разделе «Расширения».",
+  "None of your manga extensions has this manga.": "Ни в одном из ваших расширений для манги нет этой манги.",
+  "Page {n} / {total}": "Страница {n} / {total}",
+  "Pick the right series": "Выберите нужную серию",
+  "Previous chapter": "Предыдущая глава",
+  "Read chapter {n}": "Читать главу {n}",
+  "Reading mode": "Режим чтения",
+  "Right to left": "Справа налево",
+  "Source": "Источник",
+  "Vertical": "Вертикально"
 }

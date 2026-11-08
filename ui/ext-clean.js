@@ -19,3 +19,25 @@ export function clean (results) {
     type: TYPES.includes(r.type) ? r.type : undefined
   }))
 }
+
+// Manga extensions (type "manga"): what search, chapters and pages may return
+const text = v => typeof v === 'string' ? v.slice(0, 300) : ''
+const id = v => (typeof v === 'string' || typeof v === 'number') && String(v) ? String(v).slice(0, 500) : null
+const https = v => typeof v === 'string' && /^https:\/\//i.test(v) ? v : ''
+const list = (v, f) => Array.isArray(v) ? v.map(f).filter(Boolean) : []
+
+// [{ id, title, cover, anilistId }]: one series on the site
+export const cleanSeries = results => list(results, r => r && id(r.id) && {
+  id: id(r.id), title: text(r.title) || id(r.id), cover: https(r.cover), anilistId: Number.isInteger(r.anilistId) ? r.anilistId : null
+})
+// [{ id, number, title, group, lang, date }]: number may be 10.5, or null (a oneshot, an extra)
+export const cleanChapters = results => list(results, r => r && id(r.id) && {
+  id: id(r.id),
+  number: typeof r.number === 'number' && isFinite(r.number) && r.number >= 0 ? r.number : null,
+  title: text(r.title),
+  group: text(r.group),
+  lang: text(r.lang).toLowerCase(),
+  date: r.date instanceof Date && !isNaN(r.date) ? r.date : null
+})
+// the chapter's page images, in order
+export const cleanPages = results => list(results, https)

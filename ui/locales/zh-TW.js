@@ -522,5 +522,17 @@ export default {
   "Search manga": "搜尋漫畫",
   "Search manga…": "搜尋漫畫…",
   "Switch to anime": "切換到動畫",
-  "Switch to manga": "切換到漫畫"
+  "Switch to manga": "切換到漫畫",
+  "Left to right": "從左到右",
+  "Next chapter": "下一話",
+  "No manga extensions enabled. Add one in Extensions.": "沒有啟用的漫畫擴充功能。請在擴充功能中新增。",
+  "None of your manga extensions has this manga.": "你的漫畫擴充功能裡都沒有這部漫畫。",
+  "Page {n} / {total}": "第 {n} / {total} 頁",
+  "Pick the right series": "請選擇正確的作品",
+  "Previous chapter": "上一話",
+  "Read chapter {n}": "閱讀第 {n} 話",
+  "Reading mode": "閱讀模式",
+  "Right to left": "從右到左",
+  "Source": "來源",
+  "Vertical": "直向捲動"
 }

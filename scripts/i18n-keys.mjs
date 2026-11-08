@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import { LANGS } from '../ui/lang.js'
 import { EN } from '../ui/i18n.js'
 
-const SOURCES = ['ui/app.js', 'ui/player.js', 'ui/anilist-sync.js', 'ui/extensions.js', 'ui/room.js', 'main.js', 'downloads.js', 'anilist-auth.js', 'discord.js']
+const SOURCES = ['ui/app.js', 'ui/player.js', 'ui/anilist-sync.js', 'ui/extensions.js', 'ui/reader.js', 'ui/room.js', 'main.js', 'downloads.js', 'anilist-auth.js', 'discord.js']
 // shown through t(variable): each must also appear in app.js, which i18n.test.js checks
 export const DATA = [
   'Action', 'Adventure', 'Comedy', 'Drama', 'Ecchi', 'Fantasy', 'Horror', 'Mahou Shoujo', 'Mecha', 'Music', 'Mystery', 'Psychological', 'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural', 'Thriller', 'Hentai',

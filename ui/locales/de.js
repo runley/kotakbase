@@ -522,5 +522,17 @@ export default {
   "Search manga": "Manga suchen",
   "Search manga…": "Manga suchen…",
   "Switch to anime": "Zu Anime wechseln",
-  "Switch to manga": "Zu Manga wechseln"
+  "Switch to manga": "Zu Manga wechseln",
+  "Left to right": "Links nach rechts",
+  "Next chapter": "Nächstes Kapitel",
+  "No manga extensions enabled. Add one in Extensions.": "Keine Manga-Erweiterung aktiviert. Füge eine unter Erweiterungen hinzu.",
+  "None of your manga extensions has this manga.": "Keine deiner Manga-Erweiterungen hat diesen Manga.",
+  "Page {n} / {total}": "Seite {n} / {total}",
+  "Pick the right series": "Wähle die richtige Serie",
+  "Previous chapter": "Vorheriges Kapitel",
+  "Read chapter {n}": "Kapitel {n} lesen",
+  "Reading mode": "Lesemodus",
+  "Right to left": "Rechts nach links",
+  "Source": "Quelle",
+  "Vertical": "Vertikal"
 }
