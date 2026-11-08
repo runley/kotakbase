@@ -19,7 +19,9 @@ export const LANGS = {
   pol: ['Polish', 'pl'],
   tur: ['Turkish', 'tr'],
   dut: ['Dutch', 'nl', 'nld'],
-  swe: ['Swedish', 'sv']
+  swe: ['Swedish', 'sv'],
+  ukr: ['Ukrainian', 'uk'],
+  kaz: ['Kazakh', 'kk']
 }
 
 // Which settings language a track is in, from its language code (e.g. "eng", "en-US") or, failing that, its name (e.g. "English subs").

@@ -1210,7 +1210,7 @@ function rememberSource (m, r) {
 }
 
 // Audio languages as short tags (JP, EN, CN, …), read from the release's names like Auto Select does
-const SHORT = { jpn: 'JP', chi: 'CN', kor: 'KR' } // country-style where it's the familiar form; else the 2-letter code
+const SHORT = { jpn: 'JP', chi: 'CN', kor: 'KR', ukr: 'UA', kaz: 'KZ' } // country-style where it's the familiar form; else the 2-letter code
 const short = k => SHORT[k] ?? LANGS[k]?.[1]?.toUpperCase() ?? k
 // audio: filled tags; subtitles: outlined, only when the name states them ("Multi Subs" already has its own tag)
 const langTags = (r, multiSubs) => [...resultLanguages(r)].map(k => `<i class="lang" title="${t('Audio: {language}', { language: esc(t(LANGS[k]?.[0] ?? k)) })}">${esc(short(k))}</i>`).join('') +
@@ -2137,12 +2137,60 @@ function ask (title, body, ok = t('OK'), cancel = t('Cancel')) {
   })
 }
 
-// First launch only: Kotakbase ships no sources, so offer to add some straight away
+// First launch, step one: languages and the few settings worth choosing before anything plays (all also in Settings).
+// Each choice goes first in Settings' ordered lists, so the other languages there stay as fallbacks.
+const SUBS_IN = { en: 'eng', ru: 'rus', de: 'ger', es: 'spa', 'zh-CN': 'chi', 'zh-TW': 'chi', ja: 'jpn', uk: 'ukr', kk: 'kaz' } // subtitles in the app's language
+function setup () {
+  const modal = document.createElement('div')
+  modal.className = 'modal'
+  const choice = { audio: player.langPrefs('audioLangs')[0] ?? 'jpn', subs: null, discord: load('discord', true), tray: load('closeToTray', true) }
+  const subs = () => choice.subs ?? SUBS_IN[language()] ?? 'eng' // follows the app's language until picked
+  const options = (list, selected) => list.map(([k, n]) => `<option value="${esc(k)}" ${k === selected ? 'selected' : ''}>${esc(n)}</option>`).join('')
+  const draw = () => {
+    const langs = Object.entries(LANGS).map(([k, [n]]) => [k, t(n)])
+    modal.innerHTML = `<div class="welcome setup" role="dialog" aria-labelledby="setup-title">
+      <h2 id="setup-title">${t('Welcome to Kotakbase')}</h2>
+      <p class="muted">${t('A few choices before you start. You can change them any time in Settings.')}</p>
+      <label class="field"><span>${t('Language')}</span><select data-set="language">${options([['', t('System ({language})', { language: LANGUAGES[pickLanguage(null, navigator.languages)] })], ...Object.entries(LANGUAGES)], load('language', ''))}</select></label>
+      <label class="field"><span>${t('Audio language')}</span><select data-set="audio">${options(langs, choice.audio)}</select></label>
+      <label class="field"><span>${t('Subtitle language')}</span><select data-set="subs">${options([['', t('Off')], [SIGNS, t('Signs & Songs')], ...langs], subs())}</select></label>
+      <label class="check"><input type="checkbox" data-set="discord" ${choice.discord ? 'checked' : ''}> ${t("Show what I'm watching on my Discord profile (needs the Discord desktop app)")}</label>
+      <label class="check"><input type="checkbox" data-set="tray" ${choice.tray ? 'checked' : ''}> ${t('Keep Kotakbase running in the tray when the window is closed (quit from its tray icon). Turn off to quit on close.')}</label>
+      <div class="welcome-actions"><button class="btn" data-next>${t('Continue')}</button></div>
+    </div>`
+    modal.querySelector('[data-next]').focus()
+  }
+  // closing it any way (Continue, Escape, a click outside) keeps what's chosen and goes on to extensions
+  const close = () => {
+    modal.remove()
+    document.removeEventListener('keydown', onKey)
+    const first = (key, k) => [k, ...player.langPrefs(key).filter(x => x !== k)]
+    save('audioLangs', first('audioLangs', choice.audio))
+    save('subLangs', subs() ? first('subLangs', subs()) : [])
+    save('discord', choice.discord)
+    save('closeToTray', choice.tray)
+    window.native.closeToTray(choice.tray)
+    welcome()
+  }
+  const onKey = e => { if (e.key === 'Escape') close() }
+  document.addEventListener('keydown', onKey)
+  modal.onclick = e => { if (e.target === modal || e.target.closest('[data-next]')) close() }
+  modal.onchange = async e => {
+    const { set } = e.target.dataset
+    if (set === 'language') { await changeLanguage(e.target.value); return draw() } // the screen redraws in it
+    if (set === 'discord' || set === 'tray') choice[set] = e.target.checked
+    else choice[set] = e.target.value
+  }
+  document.body.append(modal)
+  draw()
+}
+
+// First launch, step two: Kotakbase ships no sources, so offer to add some straight away
 function welcome () {
   const modal = document.createElement('div')
   modal.className = 'modal'
   modal.innerHTML = `<div class="welcome" role="dialog" aria-labelledby="welcome-title">
-    <h2 id="welcome-title">${t('Welcome to Kotakbase')}</h2>
+    <h2 id="welcome-title">${t('Extensions')}</h2>
     <p>${t('Kotakbase finds episodes through extensions, and comes with none. Add at least one to start watching.')}</p>
     <p class="muted">${t('Paste a Hayase extension link (https://…/index.json, gh:user/repo or npm:package). You can add or remove extensions any time under Extensions in the top bar.')}</p>
     <form class="add"><input placeholder="${t('Extension link')}" aria-label="${t('Extension link')}" required><button class="btn">${t('Add')}</button></form>
@@ -2204,7 +2252,7 @@ async function changeLanguage (code) {
   drawUpdate()
   route()
 }
-if (firstLaunch) welcome()
+if (firstLaunch) setup()
 sync = createSync({ load, save, show: id => cache.get(id), native: window.native.anilist, onImported: route, ask })
 sync.start()
 route()
