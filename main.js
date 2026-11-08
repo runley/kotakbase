@@ -62,6 +62,9 @@ function openCors (ses) {
       ...(d.method === 'OPTIONS' && { statusLine: 'HTTP/1.1 204 No Content' }) // preflights pass even on sites that 404 them
     })
   })
+  // MangaDex's API sends browser User-Agents to a bot check and asks apps to name themselves instead (its manga
+  // extension can't: pages may not set User-Agent)
+  ses.webRequest.onBeforeSendHeaders({ urls: ['https://api.mangadex.org/*'] }, (d, cb) => cb({ requestHeaders: { ...d.requestHeaders, 'User-Agent': `Kotakbase/${app.getVersion()}` } }))
 }
 // Saved data (localStorage) belongs to the page's origin: copied once from the old file:// page to app://.
 async function migrateStorage () {
