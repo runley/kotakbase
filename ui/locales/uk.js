@@ -551,5 +551,21 @@ export default {
   "watched that year": "переглянуто цього року",
   "vs. the AniList average": "відносно середнього на AniList",
   "you {score} · avg {avg}": "ви {score} · середнє {avg}",
-  "{n} days": {"one": "{n} день", "few": "{n} дні", "many": "{n} днів", "other": "{n} дня"}
+  "{n} days": {"one": "{n} день", "few": "{n} дні", "many": "{n} днів", "other": "{n} дня"},
+  "Chapter {n}": "Розділ {n}",
+  "Chapters read": "Прочитано розділів",
+  "Chapters you read show up here.": "Тут з’являтимуться розділи, які ви читаєте.",
+  "Close the player and leave Watch Together to switch to manga.": "Закрийте плеєр і вийдіть із Watch Together, щоб перейти до манґи.",
+  "Continue Reading": "Продовжити читання",
+  "Continue reading": "Продовжити читання",
+  "Details": "Докладніше",
+  "First AniList manga sync for {name}": "Перша синхронізація манґи з AniList для {name}",
+  "Light Novel": "Ранобе",
+  "Manga": "Манґа",
+  "Mark chapter {n} read": "Позначити розділ {n} прочитаним",
+  "One Shot": "Ваншот",
+  "Search manga": "Пошук манґи",
+  "Search manga…": "Пошук манґи…",
+  "Switch to anime": "Перейти до аніме",
+  "Switch to manga": "Перейти до манґи"
 }

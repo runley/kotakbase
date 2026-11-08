@@ -506,5 +506,21 @@ export default {
   "watched that year": "in dem Jahr geschaut",
   "vs. the AniList average": "im Vergleich zum AniList-Schnitt",
   "you {score} · avg {avg}": "du {score} · Ø {avg}",
-  "{n} days": {"one": "{n} Tag", "other": "{n} Tage"}
+  "{n} days": {"one": "{n} Tag", "other": "{n} Tage"},
+  "Chapter {n}": "Kapitel {n}",
+  "Chapters read": "Gelesene Kapitel",
+  "Chapters you read show up here.": "Kapitel, die du liest, erscheinen hier.",
+  "Close the player and leave Watch Together to switch to manga.": "Schließe den Player und verlasse Watch Together, um zu Manga zu wechseln.",
+  "Continue Reading": "Weiterlesen",
+  "Continue reading": "Weiterlesen",
+  "Details": "Details",
+  "First AniList manga sync for {name}": "Erster AniList-Manga-Sync für {name}",
+  "Light Novel": "Light Novel",
+  "Manga": "Manga",
+  "Mark chapter {n} read": "Kapitel {n} als gelesen markieren",
+  "One Shot": "One-Shot",
+  "Search manga": "Manga suchen",
+  "Search manga…": "Manga suchen…",
+  "Switch to anime": "Zu Anime wechseln",
+  "Switch to manga": "Zu Manga wechseln"
 }

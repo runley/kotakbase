@@ -506,5 +506,21 @@ export default {
   "watched that year": "その年に視聴",
   "vs. the AniList average": "AniList平均との差",
   "you {score} · avg {avg}": "あなた {score}・平均 {avg}",
-  "{n} days": "{n}日"
+  "{n} days": "{n}日",
+  "Chapter {n}": "第{n}話",
+  "Chapters read": "読んだ話数",
+  "Chapters you read show up here.": "読んだ話がここに表示されます。",
+  "Close the player and leave Watch Together to switch to manga.": "マンガに切り替えるには、プレーヤーを閉じてWatch Togetherを退出してください。",
+  "Continue Reading": "読み続ける",
+  "Continue reading": "続きを読む",
+  "Details": "詳細",
+  "First AniList manga sync for {name}": "{name}さんの初回AniListマンガ同期",
+  "Light Novel": "ライトノベル",
+  "Manga": "マンガ",
+  "Mark chapter {n} read": "第{n}話を既読にする",
+  "One Shot": "読み切り",
+  "Search manga": "マンガを検索",
+  "Search manga…": "マンガを検索…",
+  "Switch to anime": "アニメに切り替え",
+  "Switch to manga": "マンガに切り替え"
 }

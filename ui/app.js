@@ -20,10 +20,16 @@ const load = (key, def) => {
   return stored.get(key) ?? def
 }
 let sync = null // AniList sync (anilist-sync.js): queues what changed, only while signed in
+let mangaSync = null // the same for the manga list
+// Manga mode (the logo box switches it): the same pages on AniList's manga, with its own list, progress, ratings and
+// history under "manga:" keys. The player, Watch Together, Schedule and Stats stay anime-only.
+let manga = load('mode', 'anime') === 'manga'
+const K = (key, mg = manga) => mg ? 'manga:' + key : key
 const save = (key, val) => {
   localStorage.setItem(key, JSON.stringify(val))
   stored.set(key, val)
   if (key === 'progress' || key === 'list' || key === 'scores') sync?.changed()
+  if (key === 'manga:progress' || key === 'manga:list' || key === 'manga:scores') mangaSync?.changed()
 }
 const unstore = key => { localStorage.removeItem(key); stored.delete(key) }
 // 1.0.1 and older rated 1-5 stars (also after importing an old backup): now a 1-100 score. A star rating that came
@@ -44,13 +50,13 @@ window.native.setLanguage(language())
 
 
 // ---- AniList ----
-const FIELDS = `id idMal title { romaji english native userPreferred } synonyms coverImage { large extraLarge color } bannerImage
-  description(asHtml: false) episodes format status season seasonYear averageScore genres duration
+const FIELDS = `id idMal type title { romaji english native userPreferred } synonyms coverImage { large extraLarge color } bannerImage
+  description(asHtml: false) episodes chapters volumes format status season seasonYear averageScore genres duration
   nextAiringEpisode { episode } startDate { year month day } tags { name rank isMediaSpoiler }`
 // Just what cards and the home hero show, for long lists (home rows, View More, search): a top-100 list with
 // descriptions and tags is several times bigger. The show page and anything needing the rest fetch FIELDS (see full).
-const LIST_FIELDS = `id title { romaji english native userPreferred } coverImage { large extraLarge color } bannerImage
-  episodes format status season seasonYear averageScore genres nextAiringEpisode { episode } startDate { year month day }`
+const LIST_FIELDS = `id type title { romaji english native userPreferred } coverImage { large extraLarge color } bannerImage
+  episodes chapters format status season seasonYear averageScore genres nextAiringEpisode { episode } startDate { year month day }`
 const full = m => !!m && 'synonyms' in m // fetched with FIELDS, not LIST_FIELDS
 
 async function anilist (query, variables = {}, tries = 0) {
@@ -64,17 +70,19 @@ async function anilist (query, variables = {}, tries = 0) {
   if (json.errors) throw new Error(json.errors[0].message)
   return json.data
 }
-const page = (args, vars, variables, { perPage = 30, pageNum = 1, fields = FIELDS } = {}) => anilist(`query${vars ? `(${vars})` : ''} { Page(page: ${pageNum}, perPage: ${perPage}) { media(type: ANIME, isAdult: false, ${args}) { ${fields} } } }`, variables).then(d => d.Page.media)
+// type: the mode's by default; null for lookups by id, which find anime and manga alike
+const page = (args, vars, variables, { perPage = 30, pageNum = 1, fields = FIELDS, type = manga ? 'MANGA' : 'ANIME' } = {}) => anilist(`query${vars ? `(${vars})` : ''} { Page(page: ${pageNum}, perPage: ${perPage}) { media(${type ? `type: ${type}, ` : ''}isAdult: false, ${args}) { ${fields} } } }`, variables).then(d => d.Page.media)
 // The first `limit` results of a list query; AniList hands out at most 50 per request, so the top 100 takes two.
 // Home lists: shown instantly from what was saved last time, and re-downloaded once per app start in the background
 // (saved for the next visit), so they're fresh each launch and every later visit that day needs no download.
 // Your own rows aren't cached here: they come from local data.
 const listCache = new Map() // query → promise of the list, for this app start
 function top (args, vars, variables, limit) {
-  const key = 'list:' + JSON.stringify([args, variables, limit, LIST_FIELDS.length]) // LIST_FIELDS: a code change re-fetches
+  const type = manga ? 'MANGA' : 'ANIME'
+  const key = 'list:' + JSON.stringify([type, args, variables, limit, LIST_FIELDS.length]) // LIST_FIELDS: a code change re-fetches
   if (listCache.has(key)) return listCache.get(key)
   const download = () => {
-    const promise = fetchTop(args, vars, variables, limit)
+    const promise = fetchTop(args, vars, variables, limit, type)
     promise.then(list => {
       // drop lists unused for 30 days (e.g. last season's) or saved with other fields by an older version; storage full → memory only
       for (const k of Object.keys(localStorage)) {
@@ -95,10 +103,10 @@ function top (args, vars, variables, limit) {
   }
   return listCache.get(key)
 }
-async function fetchTop (args, vars, variables, limit) {
+async function fetchTop (args, vars, variables, limit, type) {
   // AniList now and then answers a busy moment with an empty list; these lists are never really empty, so ask once more
   const get = async pageNum => {
-    const opts = { perPage: Math.min(50, limit), pageNum, fields: LIST_FIELDS }
+    const opts = { perPage: Math.min(50, limit), pageNum, fields: LIST_FIELDS, type }
     const list = await page(args, vars, variables, opts)
     return list.length ? list : new Promise(resolve => setTimeout(() => resolve(page(args, vars, variables, opts)), 1000))
   }
@@ -133,7 +141,7 @@ let persistTimer
 function persistShows () {
   clearTimeout(persistTimer)
   persistTimer = setTimeout(() => {
-    const keep = new Set([...Object.keys(progress()).map(Number), ...myList(), ...load('history', []).map(h => h.id)])
+    const keep = new Set([false, true].flatMap(mg => [...Object.keys(progress(mg)).map(Number), ...myList(mg), ...load(K('history', mg), []).map(h => h.id)]))
     const out = {}
     for (const id of keep) if (full(cache.get(id))) out[id] = [cache.get(id), cacheAt.get(id)]
     try { save(SAVED, out) } catch {} // storage full: they're still kept for this session
@@ -142,7 +150,7 @@ function persistShows () {
 async function fetchIds (ids) {
   const chunks = []
   for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50))
-  remember((await Promise.all(chunks.map(c => page('id_in: $ids', '$ids: [Int]', { ids: c }, { perPage: 50 })))).flat())
+  remember((await Promise.all(chunks.map(c => page('id_in: $ids', '$ids: [Int]', { ids: c }, { perPage: 50, type: null })))).flat())
   persistShows()
 }
 // MyAnimeList's details (official API) when AniList can't answer; the MAL id comes from the saved copy or ani.zip.
@@ -190,7 +198,7 @@ async function byIds (ids, onProgress) {
 // fetched again; the cached copy is the fallback if that fails, and MyAnimeList if there's no copy at all.
 async function media (id) {
   if (!full(cache.get(id)) || Date.now() - cacheAt.get(id) > 5 * 60 * 1000) {
-    try { remember(await page('id: $id', '$id: Int', { id })); persistShows() } catch (e) {
+    try { remember(await page('id: $id', '$id: Int', { id }, { type: null })); persistShows() } catch (e) {
       if (!full(cache.get(id))) await malFallback(id, true).catch(() => { throw e })
     }
   }
@@ -217,13 +225,14 @@ const similar = id => once('similar' + id, () =>
 // further, since they also link loosely related works.
 const FRANCHISE = ['PREQUEL', 'SEQUEL', 'PARENT', 'SIDE_STORY', 'SPIN_OFF', 'ALTERNATIVE', 'SUMMARY', 'COMPILATION']
 const related = id => once('related' + id, async () => {
+  const type = manga ? 'MANGA' : 'ANIME'
   const seen = new Set([id])
   let next = [id]
   while (next.length && seen.size < 100) { // shortcut: stops at 100 entries, enough for any but the very longest franchises
     const edges = 'relations { edges { relationType node { id type format isAdult REST } } }'
     const d = await anilist(`query($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids) { ${edges.replace('REST', edges.replace(' REST', ''))} } } }`, { ids: next.slice(0, 50) })
     next = []
-    const anime = e => e.node.type === 'ANIME' && !e.node.isAdult
+    const anime = e => e.node.type === type && !e.node.isAdult // the same kind: anime, or manga
     const inFranchise = e => anime(e) && FRANCHISE.includes(e.relationType)
     const loose = e => anime(e) && e.relationType === 'OTHER' && e.node.format !== 'MUSIC'
     for (const e of d.Page.media.flatMap(x => x.relations.edges)) {
@@ -241,35 +250,40 @@ const related = id => once('related' + id, async () => {
   return (await byIds([...seen])).sort((x, y) => date(x) - date(y))
 })
 
-const epCount = m => m.episodes ?? (m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : 1)
+const isManga = m => m.type === 'MANGA'
+// a manga's "episodes" are its chapters (Infinity: still running, so no total yet)
+const epCount = m => isManga(m) ? m.chapters || Infinity : m.episodes ?? (m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : 1)
+const showHref = m => `#/${isManga(m) ? 'manga' : 'anime'}/${m.id}`
 // episodes out so far: an airing show's planned total hasn't all aired yet
 const airedCount = m => m.nextAiringEpisode ? m.nextAiringEpisode.episode - 1 : epCount(m)
 // Japanese: the romaji title, which is what AniList's search finds (it doesn't match Japanese script); otherwise English
 const title = m => (language() === 'ja' && m.title.romaji) || (m.title.english ?? m.title.userPreferred ?? m.title.romaji)
 const FORMAT = { TV: 'TV Series', TV_SHORT: 'TV Short', MOVIE: 'Movie', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Special' }
-const fmt = f => FORMAT[f] ? t(FORMAT[f]) : (f ?? '')
+const MANGA_FORMAT = { MANGA: 'Manga', NOVEL: 'Light Novel', ONE_SHOT: 'One Shot' }
+const fmt = f => FORMAT[f] ? t(FORMAT[f]) : MANGA_FORMAT[f] ? t(MANGA_FORMAT[f]) : (f ?? '')
 const STATUS = { RELEASING: 'Releasing', FINISHED: 'Finished', NOT_YET_RELEASED: 'Not yet released', CANCELLED: 'Cancelled', HIATUS: 'On hiatus' }
 const SEASON = { WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall' }
 
 // ---- local state: list + watch progress ----
-const myList = () => load('list', [])
-const progress = () => load('progress', {}) // id -> { episode, time, duration, at }
-const scores = () => load('scores', {}) // id -> your 1-100 score, AniList's scale
+// mg: anime (false) or manga (true); the current mode's when left out. A manga's "episode" is the chapter you're on.
+const myList = mg => load(K('list', mg), [])
+const progress = mg => load(K('progress', mg), {}) // id -> { episode, time, duration, at }
+const scores = mg => load(K('scores', mg), {}) // id -> your 1-100 score, AniList's scale
 // Set progress by hand from an episode card: everything up to and including n watched, or n onwards unwatched
 function markWatched (m, n) {
   const entry = n < epCount(m) ? { episode: n + 1, time: 0, duration: 1 } : { episode: n, time: 1, duration: 1, ...(m.status === 'FINISHED' && { finished: true }) }
-  save('progress', { ...progress(), [m.id]: { ...entry, at: Date.now() } })
+  save(K('progress'), { ...progress(), [m.id]: { ...entry, at: Date.now() } })
 }
 function markUnwatched (m, n) {
-  sync?.unwatch(m.id) // the one change that also lowers AniList's progress
+  ;(manga ? mangaSync : sync)?.unwatch(m.id) // the one change that also lowers AniList's progress
   const all = progress()
   if (n <= 1) delete all[m.id]
   else all[m.id] = { episode: n, time: 0, duration: 1, at: Date.now() }
-  save('progress', all)
+  save(K('progress'), all)
 }
 function toggleList (id) {
   const list = myList()
-  save('list', list.includes(id) ? list.filter(x => x !== id) : [id, ...list])
+  save(K('list'), list.includes(id) ? list.filter(x => x !== id) : [id, ...list])
 }
 
 // ---- views ----
@@ -277,10 +291,10 @@ function toggleList (id) {
 // The cover: AniList's "large" (230px wide) unless the card is wider in screen pixels; sizes is --card-w in style.css
 function card (m, { nope } = {}) {
   const p = progress()[m.id]
-  return `<a class="card" href="#/anime/${m.id}">
+  return `<a class="card" href="${showHref(m)}">
     ${nope ? `<button class="card-x" data-nope="${m.id}" title="${t('Not interested')}" aria-label="${t('Not interested in {title}', { title: esc(title(m)) })}">✕</button>` : ''}
     <img loading="lazy" src="${esc(m.coverImage.large)}" srcset="${esc(m.coverImage.large)} 230w, ${esc(m.coverImage.extraLarge)} 460w" sizes="clamp(140px, 7vw, 230px)" alt="">
-    ${p ? `<div class="bar" style="width:${Math.min(100, (p.episode - 1 + p.time / (p.duration || 1)) / epCount(m) * 100)}%"></div>` : ''}
+    ${p && epCount(m) < Infinity ? `<div class="bar" style="width:${Math.min(100, (p.episode - 1 + p.time / (p.duration || 1)) / epCount(m) * 100)}%"></div>` : ''}
     <div class="t"><i style="background:${esc(m.coverImage.color ?? '#888')}"></i>${esc(title(m))}</div>
     <div class="m"><span>${esc(m.seasonYear ?? m.startDate?.year ?? '')}</span><span>${esc(fmt(m.format))}</span></div>
   </a>`
@@ -350,6 +364,25 @@ function featureBox (m, p) {
     </div>`
 }
 
+// Manga's big box: the chapter you're on (no reader yet: the button marks it read), or the top trending manga
+function mangaBox (m, p) {
+  const ch = p?.episode ?? 1
+  const total = epCount(m)
+  const about = [m.startDate?.year, fmt(m.format), ...(m.genres ?? []).slice(0, 3).map(g => t(g))].filter(Boolean).join(' · ')
+  return `<img class="box-cover" src="${esc(m.coverImage.extraLarge)}" alt="">
+    <div class="box-body">
+      <span class="kicker">${p ? t('Continue reading') : t('Trending now')}</span>
+      <h1><a href="${showHref(m)}">${esc(title(m))}</a></h1>
+      <p class="muted">${p ? t('Chapter {n}', { n: ch }) : esc(about)}</p>
+      ${p && total < Infinity ? `<div class="meter" aria-hidden="true"><i style="width:${Math.min(100, (ch - 1) / total * 100)}%"></i></div>` : ''}
+      <div class="actions">
+        ${p ? `<button class="btn" data-read="${m.id}">${t('Mark chapter {n} read', { n: ch })}</button>` : ''}
+        <a class="btn ${p ? 'ghost' : ''}" href="${showHref(m)}">${t('Details')}</a>
+        ${listButton(m, 'sq')}
+      </div>
+    </div>`
+}
+
 // The home page's "Airing today" box: today's episodes of the shows you follow (the Schedule page's data)
 function todayBox (items) {
   const end = new Date()
@@ -369,17 +402,25 @@ async function home () {
     if (p) p.textContent = t("AniList isn't responding, so these come from MyAnimeList one show at a time: {done} of {total}…", { done, total })
   }
   const cont = continueWatching((done, total) => loading(0, done, total))
-  const rows = [
-    [t('Continue Watching'), cont.then(l => l.slice(0, ROW_LIMIT)), 'continue'],
-    [popularThis(), seasonal(), 'season'],
-    [t('Your List'), byIds(myList().slice(0, ROW_LIMIT), (done, total) => loading(2, done, total)), 'list'],
-    [t('Trending Now'), trending(), 'trending'],
-    [t('All Time Popular'), allTimePopular(), 'popular'],
-    [t('Fuel the Hype'), upcoming(), 'upcoming'],
-    [t('Recommended For You'), recommended().catch(() => []), 'recommended'],
-    ['', becauseRows().catch(() => []), 'because']
-  ]
-  const hasShows = [Object.values(progress()).some(p => !p.hidden), false, myList().length > 0]
+  const yours = byIds(myList().slice(0, ROW_LIMIT), (done, total) => loading(manga ? 1 : 2, done, total))
+  // manga has no seasons, so no seasonal rows
+  const rows = manga
+    ? [
+        [t('Continue Reading'), cont.then(l => l.slice(0, ROW_LIMIT)), 'continue'],
+        [t('Your List'), yours, 'list'],
+        [t('Trending Now'), trending(), 'trending'],
+        [t('All Time Popular'), allTimePopular(), 'popular']
+      ]
+    : [
+        [t('Continue Watching'), cont.then(l => l.slice(0, ROW_LIMIT)), 'continue'],
+        [popularThis(), seasonal(), 'season'],
+        [t('Your List'), yours, 'list'],
+        [t('Trending Now'), trending(), 'trending'],
+        [t('All Time Popular'), allTimePopular(), 'popular'],
+        [t('Fuel the Hype'), upcoming(), 'upcoming']
+      ]
+  rows.push([t('Recommended For You'), recommended().catch(() => []), 'recommended'], ['', becauseRows().catch(() => []), 'because'])
+  const hasShows = rows.map(([, , kind]) => kind === 'continue' ? Object.values(progress()).some(p => !p.hidden) : kind === 'list' && myList().length > 0)
   $app.innerHTML = `<section class="bento" aria-label="${t('Overview')}"><div class="box box-feature"></div><div class="box box-today"><h2>${t('Airing today')}</h2><p class="muted">${t('Loading…')}</p></div></section>
     ${rows.map(([name], k) => `<div data-row="${k}">${hasShows[k] ? `<section class="row"><h2>${esc(name)}</h2><p class="muted" data-loading>${t('Loading…')}</p></section>` : ''}</div>`).join('')}`
   const bento = $app.firstElementChild // this drawing of the page, to notice it was replaced meanwhile
@@ -391,16 +432,16 @@ async function home () {
   cont.catch(() => []).then(async l => {
     const m = l[0] ?? (await trending().catch(() => [])).find(x => x.bannerImage)
     if (!bento.isConnected) return
-    if (m) feature.innerHTML = featureBox(m, l[0] ? progress()[m.id] : null)
+    if (m) feature.innerHTML = (manga ? mangaBox : featureBox)(m, l[0] ? progress()[m.id] : null)
     else feature.remove()
   })
   const today = bento.querySelector('.box-today')
-  weekSchedule(false).then(items => { if (bento.isConnected) today.innerHTML = todayBox(items) },
+  if (!manga) weekSchedule(false).then(items => { if (bento.isConnected) today.innerHTML = todayBox(items) },
     () => { if (bento.isConnected) today.innerHTML = `<h2>${t('Airing today')}</h2><p class="muted">${t("The schedule isn't available right now.")}</p><a class="more" href="#/schedule">${t('Full schedule →')}</a>` })
   await Promise.all(filled) // the router restores the scroll position once the rows are there
 }
 
-const continueIds = () => Object.entries(progress()).sort((a, b) => b[1].at - a[1].at).map(([id]) => Number(id))
+const continueIds = mg => Object.entries(progress(mg)).sort((a, b) => b[1].at - a[1].at).map(([id]) => Number(id))
 // a show is done once its final episode is 90% watched and it has finished airing (older entries carry no flag, so check)
 const isFinished = m => { const p = progress()[m.id]; return !!p && (p.finished || (m.status === 'FINISHED' && p.episode >= epCount(m) && p.time >= p.duration * 0.9)) }
 // hidden: removed from the row by the user; watching again saves a new entry without the flag, so it comes back
@@ -422,9 +463,9 @@ const likedFirst = done => {
 }
 function recPool (seeds, genres) {
   const key = JSON.stringify([seeds, genres])
-  const saved = load(REC_POOL, null)
+  const saved = load(K(REC_POOL), null)
   if (saved?.key === key && Date.now() - saved.at < 24 * 3600_000) return Promise.resolve(saved)
-  return once(REC_POOL + key, async () => {
+  return once(K(REC_POOL) + key, async () => {
     const recs = await Promise.all(seeds.map(id => anilist(`query($id: Int) { Media(id: $id) { recommendations(sort: RATING_DESC, perPage: 25) { nodes { mediaRecommendation { isAdult ${REC_FIELDS} } } } } }`, { id })
       .then(d => d.Media.recommendations.nodes.map(n => n.mediaRecommendation).filter(r => r && !r.isAdult)).catch(() => [])))
     const best = await page('sort: SCORE_DESC, genre_in: $g, id_not_in: $seen, popularity_greater: 20000', '$g: [String], $seen: [Int]', { g: genres, seen: continueIds() }, { perPage: 50, fields: REC_FIELDS }).catch(() => [])
@@ -444,7 +485,7 @@ function recPool (seeds, genres) {
     const list = [...new Map([...recs.flat(), ...best].map(m => [m.id, compact(m)])).values()]
     if (!list.length) throw new Error(t('AniList unreachable'))
     const pool = { key, at: Date.now(), list, recBy: [...recBy], franchise: [...franchise] }
-    try { save(REC_POOL, pool) } catch {} // storage full: kept for this app start only
+    try { save(K(REC_POOL), pool) } catch {} // storage full: kept for this app start only
     return pool
   })
 }
@@ -458,7 +499,7 @@ async function recommendations () {
   const seeds = likedFirst(done).filter(m => taste(sc[m.id]) > 0).slice(0, 6).map(m => m.id)
   const pool = await recPool(seeds, g)
   remember(pool.list, pool.at)
-  const nope = new Set(load('notInterested', []))
+  const nope = new Set(load(K('notInterested'), []))
   const ranked = rank(done, pool.list.filter(m => !nope.has(m.id)), { scores: sc, seen: [...continueIds(), ...pool.franchise ?? []], recBy: new Map(pool.recBy) })
   return { ranked, done }
 }
@@ -470,16 +511,16 @@ async function becauseRows () {
 }
 
 // Shows you follow: in Continue Watching (not removed or finished) or Your List. Notifications and the schedule use these.
-const followedIds = () => [...new Set([...continueIds().filter(id => !progress()[id].hidden && !progress()[id].finished), ...myList()])]
+const followedIds = (mg = manga) => [...new Set([...continueIds(mg).filter(id => !progress(mg)[id].hidden && !progress(mg)[id].finished), ...myList(mg)])]
 
 // New-episode notifications: on start and every 30 minutes, ask AniList (fresh, not the cache) how many episodes of
 // your airing shows are out; a show that has more than last time gets a Windows notification. A show seen for the
 // first time is only noted, so turning this on doesn't announce every show's back catalogue.
 async function checkNewEpisodes () {
   if (!load('notify', true)) return
-  const ids = followedIds()
+  const ids = followedIds(false)
   const shows = []
-  for (let i = 0; i < ids.length; i += 50) shows.push(...await page('id_in: $ids, status: RELEASING', '$ids: [Int]', { ids: ids.slice(i, i + 50) }, { perPage: 50 }))
+  for (let i = 0; i < ids.length; i += 50) shows.push(...await page('id_in: $ids, status: RELEASING', '$ids: [Int]', { ids: ids.slice(i, i + 50) }, { perPage: 50, type: 'ANIME' }))
   remember(shows)
   const seen = load('airedSeen', {})
   const fresh = [] // [show, newest episode]
@@ -517,7 +558,7 @@ window.native.on('hidden', () => {
 // The next 7 days of episodes from the start of today, for the shows you follow or (all) everything airing; asked once
 // per app start and day (the Schedule page and the home page's "Airing today" box share it)
 function weekSchedule (all) {
-  const ids = followedIds()
+  const ids = followedIds(false)
   if (!all && !ids.length) return Promise.resolve([])
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -538,7 +579,7 @@ function weekSchedule (all) {
 // Airing schedule: the next 7 days of episodes, for the shows you follow or for everything airing
 async function schedulePage () {
   const all = !!history.state?.scheduleAll
-  const ids = followedIds()
+  const ids = followedIds(false)
   const tabs = `<div class="tabbar"><button class="${all ? '' : 'on'}" data-all="">${t('Following')}</button><button class="${all ? 'on' : ''}" data-all="1">${t('All airing')}</button></div>`
   $app.innerHTML = `<div class="page hist-page"><h2>${t('Schedule')}</h2>${tabs}<p class="muted">${t('Loading…')}</p></div>`
   $app.onclick = e => { const b = e.target.closest('[data-all]'); if (b) { history.replaceState({ ...history.state, scheduleAll: !!b.dataset.all }, ''); schedulePage() } }
@@ -564,7 +605,7 @@ async function schedulePage () {
 
 // History page: every watched episode, newest first, grouped by day
 async function historyPage () {
-  const history = load('history', []).slice().reverse()
+  const history = load(K('history'), []).slice().reverse()
   $app.innerHTML = `<div class="page"><h2>${t('History')}</h2><p class="muted">${t('Loading…')}</p></div>`
   const shows = new Map((await byIds([...new Set(history.map(h => h.id))])).map(m => [m.id, m]))
   const day = at => new Date(at).toLocaleDateString(language(), { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -574,13 +615,13 @@ async function historyPage () {
     const m = shows.get(h.id)
     if (!m) continue
     if (day(h.at) !== current) { current = day(h.at); html += `<h3 class="hist-day">${esc(current)}</h3>` }
-    html += `<a class="hist" href="#/anime/${m.id}">
+    html += `<a class="hist" href="${showHref(m)}">
       <img src="${esc(m.coverImage.large)}" alt="" loading="lazy">
-      <span class="hist-main"><b>${esc(title(m))}</b><span class="muted">${t('Episode {n}', { n: h.episode })}${h.finished ? ` <span class="badge">${t('Finished')}</span>` : ''}</span></span>
+      <span class="hist-main"><b>${esc(title(m))}</b><span class="muted">${isManga(m) ? t('Chapter {n}', { n: h.episode }) : t('Episode {n}', { n: h.episode })}${h.finished ? ` <span class="badge">${t('Finished')}</span>` : ''}</span></span>
       <time>${new Date(h.at).toLocaleTimeString(language(), { hour: 'numeric', minute: '2-digit' })}</time>
     </a>`
   }
-  $app.innerHTML = `<div class="page hist-page"><h2>${t('History')}</h2>${html || `<p class="muted">${t('Episodes you watch show up here.')}</p>`}</div>`
+  $app.innerHTML = `<div class="page hist-page"><h2>${t('History')}</h2>${html || `<p class="muted">${manga ? t('Chapters you read show up here.') : t('Episodes you watch show up here.')}</p>`}</div>`
 }
 
 // Stats page: AniList's numbers for the account, scores against everyone's, and when you watch, from Kotakbase's own
@@ -749,7 +790,7 @@ const MORE = {
 }
 async function morePage (kind) {
   const [key, load] = MORE[kind] ?? MORE.trending
-  const name = kind === 'season' ? popularThis() : t(key)
+  const name = kind === 'season' ? popularThis() : manga && kind === 'continue' ? t('Continue Reading') : t(key)
   $app.innerHTML = `<div class="page"><h2>${esc(name)}</h2><p class="muted">${t('Loading…')}</p></div>`
   const list = await load()
   // shows taken out of Continue Watching can be found (and opened, then put back) from there
@@ -772,8 +813,10 @@ const FILTERS = [
 async function search () {
   // what was searched is kept in this page's history entry, so Back from a show returns to the same results
   const state = { q: '', ...history.state?.search }
-  $app.innerHTML = `<div class="page"><input class="search-input" placeholder="${t('Search anime…')}" autofocus aria-label="${t('Search anime')}" value="${esc(state.q)}">
-    <div class="filters">${FILTERS.map(([key, label, , , options]) => `<label><span>${t(label)}</span><select data-filter="${key}"><option value="">${key === 'sort' ? t('Best match') : t('Any')}</option>${options.map(([v, l]) => `<option value="${esc(v)}" ${state[key] === v ? 'selected' : ''}>${esc(key === 'year' ? l : t(l))}</option>`).join('')}</select></label>`).join('')}
+  // manga: its own formats, and no seasons
+  const filters = manga ? FILTERS.filter(([key]) => key !== 'season').map(f => f[0] === 'format' ? [...f.slice(0, 4), Object.entries(MANGA_FORMAT)] : f) : FILTERS
+  $app.innerHTML = `<div class="page"><input class="search-input" placeholder="${manga ? t('Search manga…') : t('Search anime…')}" autofocus aria-label="${manga ? t('Search manga') : t('Search anime')}" value="${esc(state.q)}">
+    <div class="filters">${filters.map(([key, label, , , options]) => `<label><span>${t(label)}</span><select data-filter="${key}"><option value="">${key === 'sort' ? t('Best match') : t('Any')}</option>${options.map(([v, l]) => `<option value="${esc(v)}" ${state[key] === v ? 'selected' : ''}>${esc(key === 'year' ? l : t(l))}</option>`).join('')}</select></label>`).join('')}
       ${state.tag ? `<button class="chip tag-filter" data-clear-tag aria-label="${t('Remove tag filter {tag}', { tag: esc(state.tag) })}">${t('Tag: {tag}', { tag: esc(state.tag) })} ✕</button>` : ''}</div>
     <div class="grid"></div></div>`
   const input = $app.querySelector('input')
@@ -787,7 +830,7 @@ async function search () {
     const vars = []
     const variables = {}
     if (state.q) { args.push('search: $q'); vars.push('$q: String'); variables.q = state.q }
-    for (const [key, , arg, type] of [...FILTERS, ['tag', , 'tag', 'String']]) if (arg && state[key]) { args.push(`${arg}: $${key}`); vars.push(`$${key}: ${type}`); variables[key] = state[key] }
+    for (const [key, , arg, type] of [...filters, ['tag', , 'tag', 'String']]) if (arg && state[key]) { args.push(`${arg}: $${key}`); vars.push(`$${key}: ${type}`); variables[key] = state[key] }
     const filtered = args.length > (state.q ? 1 : 0)
     // nothing typed or picked: trending, as before; with only filters, the most popular match first
     const list = !args.length && !state.sort ? await trending() : await page([`sort: ${state.sort || (state.q ? 'SEARCH_MATCH' : 'POPULARITY_DESC')}`, ...args].join(', '), vars.join(', '), variables, { perPage: 50, fields: LIST_FIELDS }).then(remember)
@@ -903,7 +946,7 @@ async function detail (id) {
     if (!e.target.matches('[data-rate]')) return
     const n = toScore(e.target.value)
     const { [m.id]: old, ...rest } = scores()
-    if (n !== (old ?? 0)) save('scores', n ? { ...rest, [m.id]: n } : rest)
+    if (n !== (old ?? 0)) save(K('scores'), n ? { ...rest, [m.id]: n } : rest)
     e.target.closest('.my-score').replaceWith(document.createRange().createContextualFragment(ratingInput(m)))
   }
   $app.onclick = e => {
@@ -947,6 +990,80 @@ async function detail (id) {
       [t('Mark watched up to episode {n}', { n }), () => markWatched(m, n)],
       [t('Mark unwatched from episode {n}', { n }), () => markUnwatched(m, n)]
     ], route)
+  }
+}
+
+// A manga's page: what AniList knows, and your progress set by hand (there's no reader yet)
+async function mangaDetail (id) {
+  const m = await media(id)
+  const p = progress()[id]
+  const read = p ? p.episode - (p.time >= p.duration * 0.9 ? 0 : 1) : 0 // chapters done: the one you're on isn't, unless it's the last
+  const total = epCount(m)
+  const status = STATUS[m.status] ? t(STATUS[m.status]) : (m.status ?? '')
+  const count = total < Infinity ? `${read} / ${total}` : String(read)
+  $app.innerHTML = `<div class="show-banner" style="background-image:url('${esc(m.bannerImage ?? m.coverImage.extraLarge)}')"></div>
+  <div class="show">
+    <div class="show-head">
+      <img src="${esc(m.coverImage.extraLarge)}" alt="">
+      <div>
+        <div class="show-native">${esc(m.title.native)}</div>
+        <h1>${esc(title(m))}</h1>
+        <div class="tags">
+          <span class="pill">${t('Chapters read')}: ${count}</span>
+          <span class="pill">${esc(fmt(m.format))}</span>
+          <span class="pill">${esc(status)}</span>
+          ${m.startDate?.year ? `<span class="pill">${m.startDate.year}</span>` : ''}
+          ${m.averageScore ? `<span class="pill score">${m.averageScore}%</span>` : ''}
+        </div>
+        <p class="show-desc">${esc(plain(m.description))}</p>
+      </div>
+    </div>
+    <div class="show-actions">
+      ${read < total ? `<button class="btn" data-read="${m.id}">${t('Mark chapter {n} read', { n: read + 1 })}</button>` : ''}
+      ${listButton(m, 'sq')}
+      <label class="my-score"><span class="muted">${t('Chapters read')}</span><input type="number" min="0" ${total < Infinity ? `max="${total}"` : ''} step="1" inputmode="numeric" data-chapters value="${read}" aria-label="${t('Chapters read')}"></label>
+      ${p ? ratingInput(m) : ''}
+    </div>
+    <div class="chips">${m.genres.map(g => `<button class="chip genre" data-genre="${esc(g)}">${esc(t(g))}</button>`).join('')}</div>
+    <div class="tabbar"><button class="on" data-tab="related">${t('Related')}</button><button data-tab="similar">${t('Similar')}</button></div>
+    <div class="grid" data-panel="related"></div>
+    <div class="grid" data-panel="similar" hidden></div>
+  </div>`
+  sharpen($app.querySelector('.show-banner'), m.id)
+  const showTab = tab => {
+    history.replaceState({ ...history.state, tab }, '')
+    $app.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab))
+    $app.querySelectorAll('[data-panel]').forEach(g => { g.hidden = g.dataset.panel !== tab })
+    const grid = $app.querySelector(`[data-panel="${tab}"]`)
+    if (grid.dataset.loaded) return
+    grid.dataset.loaded = 1
+    grid.innerHTML = `<p class="muted">${t('Loading…')}</p>`
+    ;({ similar, related })[tab](m.id).then(list => { grid.innerHTML = list.map(card).join('') || `<p class="muted">${t('Nothing here yet.')}</p>` },
+      err => { delete grid.dataset.loaded; grid.innerHTML = `<p class="err">${esc(err.message)}</p>` })
+  }
+  showTab(history.state?.tab === 'similar' ? 'similar' : 'related')
+  $app.onchange = e => {
+    if (e.target.matches('[data-rate]')) {
+      const n = toScore(e.target.value)
+      const { [m.id]: old, ...rest } = scores()
+      if (n !== (old ?? 0)) save(K('scores'), n ? { ...rest, [m.id]: n } : rest)
+      return e.target.closest('.my-score').replaceWith(document.createRange().createContextualFragment(ratingInput(m)))
+    }
+    if (!e.target.matches('[data-chapters]')) return
+    const n = Math.max(0, Math.min(total, Math.round(Number(e.target.value)) || 0))
+    if (n > read) markWatched(m, n)
+    else if (n < read) markUnwatched(m, n + 1) // n + 1: the chapter you're on again; 0 takes it out of Continue Reading
+    if (n !== read) route()
+  }
+  $app.onclick = e => {
+    const tab = e.target.closest('[data-tab]')?.dataset.tab
+    if (tab) return showTab(tab)
+    const chip = e.target.closest('[data-genre]')
+    if (chip) {
+      history.replaceState({ ...history.state, scroll: $app.scrollTop }, '')
+      history.pushState({ search: { q: '', ...chip.dataset } }, '', '#/search')
+      return route()
+    }
   }
 }
 
@@ -1095,7 +1212,7 @@ function settingsPage () {
 
 // Backup: everything Kotakbase keeps, except the home-row caches (re-downloaded anyway) and AniList sync's own state
 // (tied to the sign-in, which isn't in the backup)
-const backupKeys = () => Object.keys(localStorage).filter(k => !k.startsWith('list:') && !k.startsWith('anilist') && k !== REC_POOL && k !== 'deviceId')
+const backupKeys = () => Object.keys(localStorage).filter(k => !k.startsWith('list:') && !k.startsWith('anilist') && !k.endsWith(REC_POOL) && k !== 'deviceId')
 function exportData () {
   const data = Object.fromEntries(backupKeys().map(k => [k, localStorage.getItem(k)]))
   const link = document.createElement('a')
@@ -1459,9 +1576,9 @@ function chooseFile (m, link) {
 
 // Watch history: one entry per episode watched past 90%, newest last; capped so it can't grow forever.
 function logWatched (m, episode, last) {
-  const history = load('history', [])
+  const history = load(K('history'), [])
   history.push({ id: m.id, episode, at: Date.now(), finished: last && m.status === 'FINISHED' })
-  save('history', history.slice(-2000))
+  save(K('history'), history.slice(-2000))
 }
 
 // Numbers an episode goes by besides its own (for continued seasons), as the extensions and file matching use them
@@ -1470,6 +1587,7 @@ const numberingOf = ids => ({ abs: ids.absoluteEpisodeNumber, tvdbSeason: ids.tv
 // fromRoom: the Watch Together host picked this, so it plays here too
 async function play (m, episode, result, numbering, fileIndex, fromRoom = false) {
   if (room && !room.isHost() && !fromRoom) return notHost()
+  if (manga) setMode(false, false) // playing saves anime progress (a room's host can start this from any page)
   let logged = false // one history entry per playback
   rememberSource(m, result)
   if (fileIndex == null && PICK_FILE_FORMATS.includes(m.format)) {
@@ -1938,11 +2056,19 @@ document.addEventListener('click', e => {
   const nope = e.target.closest('[data-nope]')
   if (nope) {
     e.preventDefault() // it sits on the card's link
-    save('notInterested', [...load('notInterested', []), +nope.dataset.nope])
+    save(K('notInterested'), [...load(K('notInterested'), []), +nope.dataset.nope])
     return nope.closest('.card').remove()
   }
   const s = e.target.closest('[data-surprise]')
-  if (s) return MORE[s.dataset.surprise][1]().then(list => { if (list.length) location.hash = `#/anime/${list[Math.floor(Math.random() * list.length)].id}` })
+  if (s) return MORE[s.dataset.surprise][1]().then(list => { if (list.length) location.hash = showHref(list[Math.floor(Math.random() * list.length)]) })
+  const r = e.target.closest('[data-read]')
+  if (r) {
+    const m = cache.get(+r.dataset.read)
+    const n = progress()[m.id]?.episode ?? 1
+    markWatched(m, n)
+    logWatched(m, n, n >= epCount(m))
+    return route()
+  }
   const w = e.target.closest('[data-watch]')
   if (w) { const id = +w.dataset.watch; return media(id).then(m => sources(m, Math.min(progress()[id]?.episode ?? 1, epCount(m)))) } // fresh details: episode count may have changed
   const l = e.target.closest('[data-list]')
@@ -1951,6 +2077,9 @@ document.addEventListener('click', e => {
 
 async function route () {
   const [, name, id] = location.hash.split('/')
+  // a page of the other mode (Back across a switch, a notification, an invite) switches to it
+  if (manga && ['anime', 'schedule', 'stats', 'extensions', 'together', 'downloads'].includes(name)) setMode(false, false)
+  if (!manga && name === 'manga' && !setMode(true, false)) return history.replaceState(null, '', '#/'), route()
   document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === (name || 'home')))
   $app.onclick = null
   $app.onchange = null
@@ -1962,6 +2091,7 @@ async function route () {
   try {
     if (name === 'search') await search()
     else if (name === 'anime') await detail(Number(id))
+    else if (name === 'manga') await mangaDetail(Number(id))
     else if (name === 'more') await morePage(id)
     else if (name === 'extensions') await extensionsPage()
     else if (name === 'settings') settingsPage()
@@ -1984,6 +2114,29 @@ async function route () {
 }
 let navigation = 0
 window.onhashchange = route
+
+// The logo box switches anime ⇄ manga; not while an episode is open or in a Watch Together room (their progress is anime's)
+function setMode (to, reroute = true) {
+  if (to && (room || !document.getElementById('player').hidden)) {
+    notice(t('Close the player and leave Watch Together to switch to manga.'))
+    return false
+  }
+  manga = to
+  save('mode', to ? 'manga' : 'anime')
+  applyMode()
+  if (reroute) location.hash && location.hash !== '#/' ? (location.hash = '#/') : route()
+  return true
+}
+function applyMode () {
+  document.body.classList.toggle('manga', manga)
+  const box = document.getElementById('mode-switch')
+  box.firstElementChild.textContent = manga ? 'm' : 'k'
+  box.title = manga ? t('Switch to anime') : t('Switch to manga')
+  box.setAttribute('aria-label', box.title)
+  document.querySelector('.logo-word').firstChild.textContent = manga ? 'mangal' : 'kotak'
+  document.querySelector('.top-search span').textContent = manga ? t('Search manga') : t('Search anime')
+}
+document.getElementById('mode-switch').onclick = () => setMode(!manga)
 
 // Drag to scroll with the mouse: a row of cards sideways, and in Steam's Game Mode (a finger arrives as a mouse there)
 // the page or a list up and down too. A flick coasts on after letting go; a drag doesn't count as a click on what it
@@ -2240,6 +2393,7 @@ const statics = [...document.querySelectorAll('[data-t]')].map(el => [el, null, 
   .concat(['aria-label', 'title', 'placeholder'].flatMap(attr => [...document.querySelectorAll(`[${attr}]`)].map(el => [el, attr, el.getAttribute(attr)])))
 const translateStatics = () => { for (const [el, attr, en] of statics) attr ? el.setAttribute(attr, t(en)) : (el.textContent = t(en)) }
 translateStatics()
+applyMode()
 
 // Switches language in place, without reloading the page, so a Watch Together room and the episode playing carry on
 async function changeLanguage (code) {
@@ -2248,11 +2402,15 @@ async function changeLanguage (code) {
   document.documentElement.lang = language()
   window.native.setLanguage(language())
   translateStatics()
+  applyMode()
   drawRoom()
   drawUpdate()
   route()
 }
 if (firstLaunch) setup()
-sync = createSync({ load, save, show: id => cache.get(id), native: window.native.anilist, onImported: route, ask })
+mangaSync = createSync({ type: 'MANGA', load, save, show: id => cache.get(id), native: window.native.anilist, onImported: route, ask })
+// signing in or out happens in the anime sync's places (Settings, Stats); the manga list follows the account
+sync = createSync({ load, save, show: id => cache.get(id), native: window.native.anilist, onImported: route, ask, onAccount: first => mangaSync.start(first) })
 sync.start()
+setTimeout(() => mangaSync.start(true), 8000) // after the anime list's first pull, so two first-sync questions don't overlap
 route()

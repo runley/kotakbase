@@ -16,6 +16,9 @@ test('localEntry: Kotakbase → AniList', () => {
   assert.deepEqual(localEntry({ episode: 6, time: 0, duration: 1, hidden: true }), e('DROPPED', 5)) // ✕ keeps progress
   // saved before the finished flag existed: done once the show has finished airing
   assert.deepEqual(localEntry({ episode: 12, time: 1, duration: 1 }, false, 0, { status: 'FINISHED', episodes: 12 }), e('COMPLETED', 12))
+  // a manga: chapters stand in for episodes
+  assert.deepEqual(localEntry({ episode: 40, time: 1, duration: 1 }, false, 0, { status: 'FINISHED', episodes: null, chapters: 40 }), e('COMPLETED', 40))
+  assert.deepEqual(localEntry({ episode: 41, time: 0, duration: 1 }, false, 0, { status: 'RELEASING', episodes: null, chapters: null }), e('CURRENT', 40))
 })
 
 test('toLocal: AniList → Kotakbase, and back again unchanged', () => {

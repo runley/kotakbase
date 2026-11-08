@@ -506,5 +506,21 @@ export default {
   "watched that year": "сол жылы көрілген",
   "vs. the AniList average": "AniList орташасымен салыстырғанда",
   "you {score} · avg {avg}": "сіз {score} · орташа {avg}",
-  "{n} days": {"one": "{n} күн", "other": "{n} күн"}
+  "{n} days": {"one": "{n} күн", "other": "{n} күн"},
+  "Chapter {n}": "{n}-тарау",
+  "Chapters read": "Оқылған тараулар",
+  "Chapters you read show up here.": "Оқыған тарауларыңыз осында шығады.",
+  "Close the player and leave Watch Together to switch to manga.": "Мангаға ауысу үшін ойнатқышты жабып, Watch Together бөлмесінен шығыңыз.",
+  "Continue Reading": "Оқуды жалғастыру",
+  "Continue reading": "Оқуды жалғастыру",
+  "Details": "Толығырақ",
+  "First AniList manga sync for {name}": "{name} үшін алғашқы AniList манга синхрондауы",
+  "Light Novel": "Лайт-новелла",
+  "Manga": "Манга",
+  "Mark chapter {n} read": "{n}-тарауды оқылды деп белгілеу",
+  "One Shot": "Ваншот",
+  "Search manga": "Манга іздеу",
+  "Search manga…": "Манга іздеу…",
+  "Switch to anime": "Анимеге ауысу",
+  "Switch to manga": "Мангаға ауысу"
 }

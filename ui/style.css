@@ -13,8 +13,17 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 
 /* top bar: logo, pill tabs, search, settings */
 .top { position: fixed; inset: 0 0 auto 0; height: var(--top); z-index: 10; display: flex; align-items: center; gap: 16px; padding: 0 24px; background: var(--bg); }
-.logo { display: flex; align-items: center; gap: 10px; flex: none; }
-.logo-box { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font: 800 19px var(--display); }
+.logo { display: flex; align-items: center; gap: 14px; flex: none; }
+/* the box is the anime/manga switch: a corner badge in the other mode's color, with swap arrows, says so */
+.logo-box { width: 34px; height: 34px; border-radius: 10px; border: 0; padding: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font: 800 19px var(--display); position: relative; --other: #B9A2FF; }
+.logo-swap { position: absolute; right: -6px; bottom: -6px; width: 18px; height: 18px; border-radius: 6px; background: var(--other); color: #0F0F10; box-shadow: 0 0 0 2px var(--bg); display: grid; place-items: center; transition: transform .2s; }
+.logo-swap svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.logo-box:hover .logo-swap, .logo-box:focus-visible .logo-swap { transform: scale(1.2) rotate(180deg); }
+/* manga mode: the same boxes with a violet accent on a slightly cooler black; anime-only tabs are hidden */
+body.manga { --bg: #0F0E12; --panel: #1B1A1F; --panel-2: #24222A; --line: #2A2830; --text: #F1EEF6; --muted: #968FA3; --accent: #B9A2FF; --on-accent: #0F0E12; }
+body.manga .logo-box { --other: #C8F04A; }
+body.manga :is([data-nav=schedule], [data-nav=stats], [data-nav=extensions], [data-nav=together], [data-nav=downloads]), body.manga .box-today { display: none; }
+body.manga .box-feature { grid-column: 1 / -1; }
 .logo-word { font: 800 21px var(--display); letter-spacing: -0.5px; }
 .logo-word span { color: var(--muted); }
 .tabs { display: flex; gap: 4px; background: var(--panel); padding: 5px; border-radius: 14px; overflow-x: auto; scrollbar-width: none; }

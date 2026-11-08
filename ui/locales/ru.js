@@ -506,5 +506,21 @@ export default {
   "watched that year": "просмотрено в этом году",
   "vs. the AniList average": "относительно среднего на AniList",
   "you {score} · avg {avg}": "вы {score} · среднее {avg}",
-  "{n} days": {"one": "{n} день", "few": "{n} дня", "many": "{n} дней", "other": "{n} дня"}
+  "{n} days": {"one": "{n} день", "few": "{n} дня", "many": "{n} дней", "other": "{n} дня"},
+  "Chapter {n}": "Глава {n}",
+  "Chapters read": "Прочитано глав",
+  "Chapters you read show up here.": "Здесь появятся прочитанные главы.",
+  "Close the player and leave Watch Together to switch to manga.": "Закройте плеер и выйдите из Watch Together, чтобы перейти к манге.",
+  "Continue Reading": "Продолжить чтение",
+  "Continue reading": "Продолжить чтение",
+  "Details": "Подробнее",
+  "First AniList manga sync for {name}": "Первая синхронизация манги с AniList для {name}",
+  "Light Novel": "Ранобэ",
+  "Manga": "Манга",
+  "Mark chapter {n} read": "Отметить главу {n} прочитанной",
+  "One Shot": "Ваншот",
+  "Search manga": "Поиск манги",
+  "Search manga…": "Поиск манги…",
+  "Switch to anime": "Перейти к аниме",
+  "Switch to manga": "Перейти к манге"
 }

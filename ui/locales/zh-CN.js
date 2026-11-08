@@ -506,5 +506,21 @@ export default {
   "watched that year": "当年观看",
   "vs. the AniList average": "与 AniList 平均分相比",
   "you {score} · avg {avg}": "你 {score} · 平均 {avg}",
-  "{n} days": "{n} 天"
+  "{n} days": "{n} 天",
+  "Chapter {n}": "第 {n} 话",
+  "Chapters read": "已读话数",
+  "Chapters you read show up here.": "你读过的章节会显示在这里。",
+  "Close the player and leave Watch Together to switch to manga.": "关闭播放器并退出一起看后才能切换到漫画。",
+  "Continue Reading": "继续阅读",
+  "Continue reading": "继续阅读",
+  "Details": "详情",
+  "First AniList manga sync for {name}": "{name} 的首次 AniList 漫画同步",
+  "Light Novel": "轻小说",
+  "Manga": "漫画",
+  "Mark chapter {n} read": "标记第 {n} 话已读",
+  "One Shot": "短篇",
+  "Search manga": "搜索漫画",
+  "Search manga…": "搜索漫画…",
+  "Switch to anime": "切换到动画",
+  "Switch to manga": "切换到漫画"
 }

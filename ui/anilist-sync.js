@@ -1,4 +1,5 @@
-// AniList sync, only while signed in: Kotakbase's progress, Your List and ratings ⇄ the user's AniList anime list.
+// AniList sync, only while signed in: Kotakbase's progress, Your List and ratings ⇄ the user's AniList anime list
+// (or, a second copy, manga list: chapters stand in for episodes).
 // Signed out, none of this runs. The token lives in the main process (anilist-auth.js); this side maps, merges and
 // queues. The pure helpers are exported for the tests.
 //
@@ -17,10 +18,11 @@ export const same = (a, b) => !a === !b && (!a || (a.status === b.status && a.pr
 // saved before the `finished` flag existed, like the app's isFinished.
 export function localEntry (p, inList, score = 0, show) {
   if (!p) return inList ? { status: 'PLANNING', progress: 0, score } : null
-  if (p.rewatch) return { status: 'COMPLETED', progress: Math.max(p.episode, show?.episodes ?? 0), score } // rewatching: still completed
+  const total = show?.episodes ?? show?.chapters
+  if (p.rewatch) return { status: 'COMPLETED', progress: Math.max(p.episode, total ?? 0), score } // rewatching: still completed
   const ended = p.time >= (p.duration || 1) * 0.9 // its episode is watched too (the last one: the entry stays on it)
   // finished: false = imported from AniList as CURRENT with every episode watched, which stays CURRENT there
-  const finished = p.finished ?? (show?.status === 'FINISHED' && show.episodes && p.episode >= show.episodes && ended)
+  const finished = p.finished ?? (show?.status === 'FINISHED' && total && p.episode >= total && ended)
   return { status: finished ? 'COMPLETED' : p.hidden ? 'DROPPED' : 'CURRENT', progress: ended ? p.episode : p.episode - 1, score }
 }
 
@@ -93,16 +95,20 @@ export function nextDelay (status, retryAfter, fails) {
   return GAP
 }
 
-const LIST_QUERY = `query($userId: Int) { MediaListCollection(userId: $userId, type: ANIME) { lists { entries {
-  id mediaId status progress score(format: POINT_100) updatedAt media { episodes isAdult } } } } }`
+const LIST_QUERY = type => `query($userId: Int) { MediaListCollection(userId: $userId, type: ${type}) { lists { entries {
+  id mediaId status progress score(format: POINT_100) updatedAt media { episodes chapters isAdult } } } } }`
 const ENTRY_FIELDS = 'id mediaId status progress score(format: POINT_100)'
 const TYPES = { mediaId: 'Int', status: 'MediaListStatus', progress: 'Int', scoreRaw: 'Int' }
 const fromApi = e => ({ entryId: e.id, status: e.status, progress: e.progress ?? 0, score: e.score ?? 0 })
 
-// load/save: the app's; show(id): its cached details; native: window.native.anilist; onImported: redraw after a pull
-export function createSync ({ load, save, show, native, onImported, ask }) {
-  const BASE = 'anilistBase' // { user, at, entries: { mediaId: AniList's entry as last synced } }
-  const OUTBOX = 'anilistOutbox'
+// load/save: the app's; show(id): its cached details; native: window.native.anilist; onImported: redraw after a pull;
+// type: ANIME or MANGA (whose progress, list and ratings are the app's "manga:" keys); onAccount(first): signed in
+// (first: true) or out here, for the other list to follow
+export function createSync ({ type = 'ANIME', load, save, show, native, onImported, ask, onAccount }) {
+  const manga = type === 'MANGA'
+  const key = k => manga ? 'manga:' + k : k
+  const BASE = manga ? 'anilistBaseManga' : 'anilistBase' // { user, at, entries: { mediaId: AniList's entry as last synced } }
+  const OUTBOX = manga ? 'anilistOutboxManga' : 'anilistOutbox'
   let account = null
   let lastLocal = new Map() // id → JSON of its entry, to see which shows a save changed
   let applying = false
@@ -119,9 +125,9 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
   const pending = () => Object.keys(load(OUTBOX, {})).length
 
   function locals () {
-    const progress = load('progress', {})
-    const list = new Set(load('list', []))
-    const scores = load('scores', {})
+    const progress = load(key('progress'), {})
+    const list = new Set(load(key('list'), []))
+    const scores = load(key('scores'), {})
     const ids = new Set([...Object.keys(progress), ...Object.keys(scores)].map(Number).concat([...list]))
     return new Map([...ids].map(id => [id, localEntry(progress[id], list.has(id), scores[id] ?? 0, show(id))]))
   }
@@ -167,11 +173,11 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
       // a 73 on a 10-point AniList list is kept as 70: take that here too, or every sync would send 73 again
       const kept = b.entries[id]?.score
       if (r.status === 200 && kept !== T.score) {
-        const scores = load('scores', {})
+        const scores = load(key('scores'), {})
         if (kept) scores[id] = kept
         else delete scores[id]
         applying = true
-        try { save('scores', scores) } finally { applying = false }
+        try { save(key('scores'), scores) } finally { applying = false }
       }
     }
     if (r.status === 200) save(BASE, { ...b, at: Date.now() })
@@ -208,7 +214,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
   // Pulls the whole list and merges it (the first time after asking); throws if AniList can't be reached
   async function pull () {
     const first = !active()
-    const r = await native.query(LIST_QUERY, { userId: account.user.id })
+    const r = await native.query(LIST_QUERY(type), { userId: account.user.id })
     if (r.status === 401) { account = await native.account(); notify(); return }
     if (r.status !== 200) throw new Error(r.status === 0 ? t('AniList unreachable') : `AniList: ${r.error || r.status}`)
     const remote = new Map()
@@ -227,7 +233,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
       if (!same(view(remote.get(id) && fromApi(remote.get(id))), T)) sends.push(id)
     }
     const shows = n => `<b>${t('{n} shows', { n })}</b>`
-    if (first && (imports.length || sends.length) && !await ask(t('First AniList sync for {name}', { name: account.user.name }),
+    if (first && (imports.length || sends.length) && !await ask(manga ? t('First AniList manga sync for {name}', { name: account.user.name }) : t('First AniList sync for {name}', { name: account.user.name }),
       `<ul class="ask-list"><li>${t('{shows} from AniList go into Kotakbase', { shows: shows(imports.length) })}</li><li>${t('{shows} from Kotakbase go to your AniList list', { shows: shows(sends.length) })}</li></ul>
       <p class="muted">${t('Progress is never lowered on either side. Cancel signs you out and changes nothing.')}</p>`, t('Sync'), t('Cancel'))) {
       account = await native.signOut()
@@ -250,22 +256,22 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
   }
 
   function apply (imports, remote) {
-    const progress = load('progress', {})
-    const list = load('list', [])
-    const scores = load('scores', {})
+    const progress = load(key('progress'), {})
+    const list = load(key('list'), [])
+    const scores = load(key('scores'), {})
     for (const [id, T] of imports) {
       const L = localEntry(progress[id], list.includes(id), scores[id] ?? 0, show(id))
       if (T.status === 'PLANNING') { if (!list.includes(id)) list.push(id) } else if (progress[id]?.rewatch && T.status === 'COMPLETED') {
         // rewatching here: AniList still saying completed doesn't take the rewatch's progress back
       } else if (!L || L.status !== T.status || L.progress !== T.progress) {
         const e = remote.get(id)
-        progress[id] = { ...toLocal(T, progress[id], e?.media?.episodes ?? show(id)?.episodes), at: Math.max(progress[id]?.at ?? 0, (e?.updatedAt ?? 0) * 1000) || Date.now() }
+        progress[id] = { ...toLocal(T, progress[id], e?.media?.episodes ?? e?.media?.chapters ?? show(id)?.episodes ?? show(id)?.chapters), at: Math.max(progress[id]?.at ?? 0, (e?.updatedAt ?? 0) * 1000) || Date.now() }
       }
       if (T.score) scores[id] = T.score
       else delete scores[id]
     }
     applying = true
-    try { save('progress', progress); save('list', list); save('scores', scores) } finally { applying = false }
+    try { save(key('progress'), progress); save(key('list'), list); save(key('scores'), scores) } finally { applying = false }
   }
 
   let syncing = null
@@ -276,9 +282,14 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     return syncing
   }
 
-  async function start () {
+  // first: signed in but this list never synced for this account (the manga list, the first time): its first sync now
+  async function start (first = false) {
     account = await native.account()
     notify() // Settings may be open already
+    if (first && signedIn() && !active()) {
+      if (base()?.user !== account.user.id) { save(BASE, null); save(OUTBOX, {}) }
+      return syncNow()
+    }
     if (!active()) return
     snapshot(locals())
     pump()
@@ -306,7 +317,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
     // a different account than last time: its list is merged afresh
     if (base()?.user !== r.user.id) { save(BASE, null); save(OUTBOX, {}) }
     account = r
-    syncNow()
+    syncNow().then(() => onAccount?.(true)) // after this list's first-sync question, so the two don't overlap
     return { ok: true }
   }
   // can this build sign in (it has a client id), and isn't it signed in already?
@@ -348,6 +359,7 @@ export function createSync ({ load, save, show, native, onImported, ask }) {
         save(OUTBOX, {})
         note = problem = ''
         notify()
+        onAccount?.(false)
       }
     }
     draw()
