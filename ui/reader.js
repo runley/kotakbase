@@ -20,6 +20,8 @@ export function openReader (opts) {
   el.onclick = click
   el.onchange = e => { if (e.target.matches('[data-r=mode]')) { s.mode = e.target.value; s.onMode(s.mode); draw() } }
   document.addEventListener('keydown', key)
+  document.addEventListener('keyup', keyUp)
+  addEventListener('blur', holdEnd) // the window lost focus with space down: its keyup won't come
   addEventListener('hashchange', closeReader) // Back (the mouse's too) leaves the reader, not the page under it
   chapter(s.index)
 }
@@ -30,7 +32,10 @@ export function closeReader (e) {
   const after = e?.type === 'hashchange' ? null : s.onClose
   el.remove()
   el = s = null
+  holdEnd()
   document.removeEventListener('keydown', key)
+  document.removeEventListener('keyup', keyUp)
+  removeEventListener('blur', holdEnd)
   removeEventListener('hashchange', closeReader)
   after?.()
 }
@@ -58,6 +63,8 @@ async function chapter (i) {
 const body = () => el.querySelector('.r-body')
 
 function draw () {
+  cancelAnimationFrame(hold?.raf)
+  hold = glide = null
   const row = s.chapters[s.index]
   const has = d => s.chapters[s.index + d]
   const modes = [['vertical', t('Vertical')], ['rtl', t('Right to left')], ['ltr', t('Left to right')]]
@@ -127,9 +134,59 @@ function click (e) {
   }
 }
 
+// vertical: holding space scrolls on at about reading speed until it's let go; a tap glides 60% of a screen. With
+// shift, both go back up.
+const READ_SPEED = 0.25 // screens a second while space is held
+const TAP_MS = 200 // let go sooner than this: a tap
+const STEP = 0.6
+const GLIDE_MS = 350
+let glide = null // { to, raf }
+let hold = null // { dir, at, raf }
+function holdStart (dir) {
+  if (hold) return // the key's auto-repeat
+  cancelAnimationFrame(glide?.raf)
+  glide = null
+  const b = body()
+  let pos = b.scrollTop // kept as a fraction: a few pixels a frame would round away
+  let last = performance.now()
+  hold = { dir, at: last }
+  const run = now => {
+    pos = Math.max(0, Math.min(b.scrollHeight - b.clientHeight, pos + dir * READ_SPEED * b.clientHeight * (now - last) / 1000))
+    b.scrollTop = pos
+    last = now
+    hold.raf = requestAnimationFrame(run)
+  }
+  hold.raf = requestAnimationFrame(run)
+}
+function holdEnd () {
+  if (!hold) return
+  cancelAnimationFrame(hold.raf)
+  const { dir, at } = hold
+  hold = null
+  if (performance.now() - at < TAP_MS && el) step(dir)
+}
+const keyUp = e => { if (e.key === ' ') holdEnd() }
+function step (d) {
+  const b = body()
+  const from = b.scrollTop
+  const to = Math.max(0, Math.min(b.scrollHeight - b.clientHeight, (glide?.to ?? from) + d * b.clientHeight * STEP))
+  cancelAnimationFrame(glide?.raf)
+  const start = performance.now()
+  const run = now => {
+    const k = Math.min(1, (now - start) / GLIDE_MS)
+    b.scrollTop = from + (to - from) * (1 - (1 - k) ** 3) // eases out
+    glide = k < 1 ? { to, raf: requestAnimationFrame(run) } : null
+  }
+  glide = { to, raf: requestAnimationFrame(run) }
+}
+
 function key (e) {
   if (e.key === 'Escape') return closeReader()
-  if (s.mode === 'vertical' || e.target.matches?.('select')) return
+  if (e.target.matches?.('select, button')) return // space presses those
+  if (s.mode === 'vertical') {
+    if (e.key === ' ' && s.pages) { e.preventDefault(); holdStart(e.shiftKey ? -1 : 1) }
+    return
+  }
   const rtl = s.mode === 'rtl'
   const d = { ArrowLeft: rtl ? 1 : -1, ArrowRight: rtl ? -1 : 1, ' ': 1, PageDown: 1, PageUp: -1 }[e.key]
   if (d) { e.preventDefault(); turn(d) }
