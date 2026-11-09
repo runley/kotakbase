@@ -1,6 +1,6 @@
 # Kotakbase
 
-A Windows desktop app for streaming anime from torrents. It plays episodes while they download, tracks what you watch, and can sync your progress with AniList.
+An app for streaming anime from torrents and reading manga, for Windows, Linux and [Android](https://github.com/runley/kotakbase-android). It plays episodes while they download, tracks what you watch and read, and can sync your progress with AniList.
 
 ![Kotakbase home: continue watching, airing today and this season's shows](docs/home.jpg)
 
@@ -8,16 +8,28 @@ A Windows desktop app for streaming anime from torrents. It plays episodes while
 - **Your shows in one place**: Continue Watching, Your List, a weekly schedule and history, synced with AniList.
 - **Watch Together**: watch with friends on other devices; pausing, playing and seeking happen for everyone, and there's a chat.
 - **Downloads**: save a season or single episodes to watch offline.
+- **Manga**: tap the logo to switch to manga mode, with AniList's manga, your own manga list and a reader (vertical strip, or paged right to left or left to right) that marks chapters read.
 - **Updates itself** from this page's releases.
 - **In your language**: English, Українська, Қазақша, Русский, Deutsch, Español, 简体中文, 繁體中文 and 日本語, following your system language (or pick one in Settings).
 
 ![A show page: episodes, watch and download buttons, genres and tags](docs/show.jpg)
 
-Kotakbase comes with no sources. It finds episodes through extensions in the Hayase extension format: paste an extension link under **Extensions** to add one. Kotakbase doesn't host, index or link to any content.
+![Manga mode: trending and all-time popular manga](docs/manga.jpg)
+
+## Android
+
+[Kotakbase for Android](https://github.com/runley/kotakbase-android) is a native app with the same features: streaming, manga, AniList sync, downloads and Watch Together with desktop users. It works on any phone with Android 8 or newer and is made for foldables: unfolded, a show opens beside the page you're on and the reader shows two pages; folded, everything moves to one screen. Get the APK from its [releases](https://github.com/runley/kotakbase-android/releases).
+
+<p>
+  <img src="docs/android-unfolded.jpg" alt="Kotakbase on an unfolded Pixel Fold: the home page with a show open beside it" height="420">
+  <img src="docs/android-folded.jpg" alt="Kotakbase on a folded Pixel Fold: the same show on its own page" height="420">
+</p>
+
+Kotakbase comes with no sources. It finds episodes through extensions in the Hayase extension format, and chapters through manga extensions: paste an extension link under **Extensions** to add one. Kotakbase doesn't host, index or link to any content.
 
 ## Install
 
-Download the latest `Kotakbase-Setup-*.exe` from [Releases](https://github.com/runley/kotakbase/releases). Windows may show a SmartScreen warning; choose "More info" → "Run anyway". Kotakbase updates itself after that.
+Download the latest `Kotakbase-Setup-*.exe` (Windows) or `.AppImage` (Linux) from [Releases](https://github.com/runley/kotakbase/releases). Windows may show a SmartScreen warning; choose "More info" → "Run anyway". Kotakbase updates itself after that. For Android, see [kotakbase-android](https://github.com/runley/kotakbase-android/releases).
 
 ## Run from source
 
@@ -46,7 +58,7 @@ npm test
 
 ## Disclaimer
 
-Kotakbase is a player. It doesn't host, store, index or link to any video, and the project has no content of its own. Show information comes from AniList and MyAnimeList; where to watch comes from extensions, which are made and published by third parties, not by Kotakbase, and which you choose to install. You're responsible for what you watch and download, and for following the laws where you live. Rights holders with a concern about a specific source should contact whoever runs that source or extension.
+Kotakbase is a player. It doesn't host, store, index or link to any video, and the project has no content of its own. Show and manga information comes from AniList and MyAnimeList; where to watch comes from extensions, which are made and published by third parties, not by Kotakbase, and which you choose to install. You're responsible for what you watch and download, and for following the laws where you live. Rights holders with a concern about a specific source should contact whoever runs that source or extension.
 
 ## Licence
 

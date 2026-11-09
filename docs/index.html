@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kotakbase</title>
-<meta name="description" content="A free, open-source desktop app for streaming anime from torrents, with AniList sync, Watch Together and offline downloads.">
+<meta name="description" content="A free, open-source app for streaming anime from torrents and reading manga, with AniList sync, Watch Together and offline downloads. For Windows, Linux and Android.">
 <meta property="og:title" content="Kotakbase">
-<meta property="og:description" content="Stream anime from torrents the moment you press play, with AniList sync, Watch Together and offline downloads.">
+<meta property="og:description" content="Stream anime from torrents the moment you press play and read manga, with AniList sync and Watch Together. For Windows, Linux and Android.">
 <meta property="og:image" content="https://runley.github.io/kotakbase/home.jpg">
 <meta name="theme-color" content="#C8F04A">
 <link rel="icon" href="icon.png">
@@ -19,6 +19,8 @@
     <a class="logo" href="./"><span class="logo-box" aria-hidden="true">k</span><span>kotak<span>base</span></span></a>
     <nav class="tabs" aria-label="Site">
       <a class="wide" href="#features">Features</a>
+      <a class="wide" href="#manga">Manga</a>
+      <a class="wide" href="#android">Android</a>
       <a href="#download">Download</a>
       <a href="https://github.com/runley/kotakbase">GitHub</a>
     </nav>
@@ -31,7 +33,7 @@
       <div class="box wide">
         <span class="version" data-version>Free and open source</span>
         <h1>Anime, playing the moment you <em>press play.</em></h1>
-        <p class="lead">Kotakbase finds a release, streams it straight from the torrent and keeps your AniList up to date. No waiting for downloads, no accounts, no ads.</p>
+        <p class="lead">Kotakbase finds a release, streams it straight from the torrent and keeps your AniList up to date. Read manga in the same app, on your PC or your Android phone. No waiting for downloads, no accounts, no ads.</p>
         <div class="actions">
           <a class="btn" href="#download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v10.6l3.8-3.8 1.4 1.4L12 17.4l-6.2-6.2 1.4-1.4 3.8 3.8zM4 19h16v2H4z"/></svg>Download</a>
           <a class="btn ghost" href="https://github.com/runley/kotakbase">Source code</a>
@@ -104,21 +106,76 @@
     </div>
   </section>
 
+  <section id="manga" class="manga">
+    <div class="wrap">
+      <h2>Manga, too</h2>
+      <div class="bento">
+        <div class="box full shot"><img src="manga.jpg" alt="Manga mode: trending and all-time popular manga with a featured series" width="1904" height="993" loading="lazy"></div>
+        <div class="box">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h10a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H4zM17 8h3v12h-3"/></svg></div>
+          <h3>One switch away</h3>
+          <p>Tap the logo and Kotakbase turns into mangalbase, with AniList's manga, your manga list and your reading history.</p>
+        </div>
+        <div class="box">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
+          <h3>A reader that fits</h3>
+          <p>Read as one long vertical strip for webtoons, or page by page, right to left or left to right.</p>
+        </div>
+        <div class="box">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <h3>Progress that keeps up</h3>
+          <p>Reaching the end of a chapter marks it read and updates your AniList. Chapters come from manga extensions you install.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="android">
+    <div class="wrap">
+      <h2>On Android, folded or not</h2>
+      <div class="bento">
+        <div class="box wide shot phone"><img src="android-unfolded.jpg" alt="Kotakbase on an unfolded Pixel Fold: the home page with a show open beside it" width="1400" height="1120" loading="lazy"></div>
+        <div class="box shot phone"><img src="android-folded.jpg" alt="Kotakbase on a folded Pixel Fold: the same show on its own page" width="720" height="1328" loading="lazy"></div>
+        <div class="box">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/></svg></div>
+          <h3>Made for foldables</h3>
+          <p>Unfolded, a show opens beside the page you're on and the reader shows two pages at once. Fold it and everything moves to one screen, even mid-episode.</p>
+        </div>
+        <div class="box">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg></div>
+          <h3>The same app</h3>
+          <p>Streaming, manga, AniList sync, downloads and Watch Together with friends on PC. Plus picture-in-picture and a tabletop mode when it's half folded.</p>
+        </div>
+        <div class="box">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div>
+          <h3>Any Android phone</h3>
+          <p>Works on regular phones too, Android 8 or newer. Native and light on memory, with hardware video decoding.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="download">
     <div class="wrap">
       <h2>Download</h2>
       <div class="bento">
-        <div class="box half dl">
+        <div class="box dl">
           <h3>Windows</h3>
           <p>Windows 10 or 11, 64-bit. Kotakbase updates itself when a new version is out.</p>
           <a class="btn" data-asset="exe" href="https://github.com/runley/kotakbase/releases"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.5 4.4v7.1H3zM11.5 4.3 21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Download for Windows</a>
           <p class="fine" data-size></p>
         </div>
-        <div class="box half dl">
+        <div class="box dl">
           <h3>Linux</h3>
           <p>An AppImage for 64-bit Linux. For Dolby and DTS audio, install mpv from your package manager.</p>
           <a class="btn ghost" data-asset="AppImage" href="https://github.com/runley/kotakbase/releases"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-2.2 0-3.6 2-3.6 4.6 0 1.4.3 2.3-.8 3.9C6 12.6 4.5 15 5.3 17.5c-.9.4-1.8 1-1.3 2 .6 1.1 2.6.7 3.9 1.4 1.3.6 2.5.6 3.2-.3h1.8c.7.9 1.9.9 3.2.3 1.3-.7 3.3-.3 3.9-1.4.5-1-.4-1.6-1.3-2 .8-2.5-.7-4.9-2.3-7-1.1-1.6-.8-2.5-.8-3.9C15.6 4 14.2 2 12 2z"/></svg>Download AppImage</a>
           <p class="fine">All versions and release notes are on <a href="https://github.com/runley/kotakbase/releases">GitHub Releases</a>.</p>
+        </div>
+        <div class="box dl">
+          <h3>Android</h3>
+          <p>An APK for 64-bit Android phones, Android 8 or newer. Not on the Play Store; the app tells you when an update is out.</p>
+          <a class="btn ghost" data-apk href="https://github.com/runley/kotakbase-android/releases"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9h10v8a1 1 0 0 1-1 1h-1v3h-2v-3h-2v3H9v-3H8a1 1 0 0 1-1-1zM4 9h2v6H4zM18 9h2v6h-2zM7.5 8a4.5 4.5 0 0 1 9 0zM8.6 2.6l1.2 1.7M15.4 2.6l-1.2 1.7"/></svg>Download APK</a>
+          <p class="fine">Android versions are on the <a href="https://github.com/runley/kotakbase-android/releases">Android releases page</a>.</p>
         </div>
         <div class="box full signing">
           <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
@@ -138,7 +195,7 @@
       <a href="code-signing">Code Signing Policy</a>
       <a href="https://github.com/runley/kotakbase/issues">Report a problem</a>
     </nav>
-    <p class="note">Kotakbase is a player. It doesn't host, store or link to any video; sources come from third-party extensions you choose to install. Show information from AniList and MyAnimeList. MIT licensed.</p>
+    <p class="note">Kotakbase is a player. It doesn't host, store or link to any video; sources come from third-party extensions you choose to install. Show and manga information from AniList and MyAnimeList. MIT licensed.</p>
   </div>
 </footer>
 
@@ -159,6 +216,13 @@ fetch('https://api.github.com/repos/runley/kotakbase/releases?per_page=10')
     if (exe) document.querySelector('[data-size]').textContent = `Version ${version}, ${Math.round(exe.size / 1048576)} MB`
   })
   .catch(() => {}) // the buttons still go to the releases page
+fetch('https://api.github.com/repos/runley/kotakbase-android/releases/latest')
+  .then(r => r.ok ? r.json() : null)
+  .then(release => {
+    const apk = release?.assets.find(x => x.name.endsWith('.apk'))
+    if (apk) document.querySelector('[data-apk]').href = apk.browser_download_url
+  })
+  .catch(() => {})
 </script>
 </body>
 </html>
