@@ -14,16 +14,16 @@ export function pickSeries (m, results) {
 }
 
 // One row per chapter number, in reading order: the upload in the most preferred language (langs: 2-letter codes, best
-// first; "pt-br" counts as "pt"), else the newest. Languages not in the list are dropped, unless none of the chapters
+// first; "pt-br" counts as "pt"), then (original: true) one that isn't a mirror's copy, then the newest. Languages not in the list are dropped, unless none of the chapters
 // is in one of them. Chapters without a number (extras, oneshots) each keep a row of their own, at the end.
-export function chapterRows (chapters, langs) {
+export function chapterRows (chapters, langs, original = false) {
   const rank = c => { const i = langs.indexOf(c.lang.split('-')[0]); return i < 0 ? Infinity : i }
   const wanted = chapters.some(c => rank(c) < Infinity) ? chapters.filter(c => rank(c) < Infinity) : chapters
   const byNumber = new Map()
   for (const c of wanted) {
     const key = c.number ?? 'id:' + c.id
     const old = byNumber.get(key)
-    if (!old || rank(c) < rank(old) || (rank(c) === rank(old) && (c.date ?? 0) > (old.date ?? 0))) byNumber.set(key, c)
+    if (!old || (rank(c) - rank(old) || (original ? !!c.mirror - !!old.mirror : 0) || (old.date ?? 0) - (c.date ?? 0)) < 0) byNumber.set(key, c)
   }
   return [...byNumber.values()].sort((a, b) => (a.number ?? Infinity) - (b.number ?? Infinity))
 }

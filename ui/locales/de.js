@@ -529,6 +529,8 @@ export default {
   "None of your manga extensions has this manga.": "Keine deiner Manga-Erweiterungen hat diesen Manga.",
   "Page {n} / {total}": "Seite {n} / {total}",
   "Pick the right series": "Wähle die richtige Serie",
+  "Prefer original groups": "Originalgruppen bevorzugen",
+  "When a group and a site that re-uploads it both have a chapter, read the group's own": "Wenn eine Gruppe und eine Seite, die sie neu hochlädt, beide ein Kapitel haben, lies das der Gruppe",
   "Previous chapter": "Vorheriges Kapitel",
   "Read chapter {n}": "Kapitel {n} lesen",
   "Reading mode": "Lesemodus",

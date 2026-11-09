@@ -529,6 +529,8 @@ export default {
   "None of your manga extensions has this manga.": "Манга кеңейтімдеріңіздің ешқайсысында бұл манга жоқ.",
   "Page {n} / {total}": "{n} / {total} бет",
   "Pick the right series": "Дұрыс серияны таңдаңыз",
+  "Prefer original groups": "Түпнұсқа топтарды таңдау",
+  "When a group and a site that re-uploads it both have a chapter, read the group's own": "Топ пен оны қайта жүктейтін сайттың екеуінде де тарау болса, топтың өз тарауын оқу",
   "Previous chapter": "Алдыңғы тарау",
   "Read chapter {n}": "{n}-тарауды оқу",
   "Reading mode": "Оқу режимі",

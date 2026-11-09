@@ -30,14 +30,16 @@ const list = (v, f) => Array.isArray(v) ? v.map(f).filter(Boolean) : []
 export const cleanSeries = results => list(results, r => r && id(r.id) && {
   id: id(r.id), title: text(r.title) || id(r.id), cover: https(r.cover), anilistId: Number.isInteger(r.anilistId) ? r.anilistId : null
 })
-// [{ id, number, title, group, lang, date }]: number may be 10.5, or null (a oneshot, an extra)
+// [{ id, number, title, group, lang, date, mirror }]: number may be 10.5, or null (a oneshot, an extra); mirror: re-uploaded
+// from another group
 export const cleanChapters = results => list(results, r => r && id(r.id) && {
   id: id(r.id),
   number: typeof r.number === 'number' && isFinite(r.number) && r.number >= 0 ? r.number : null,
   title: text(r.title),
   group: text(r.group),
   lang: text(r.lang).toLowerCase(),
-  date: r.date instanceof Date && !isNaN(r.date) ? r.date : null
+  date: r.date instanceof Date && !isNaN(r.date) ? r.date : null,
+  mirror: r.mirror === true
 })
 // the chapter's page images, in order
 export const cleanPages = results => list(results, https)

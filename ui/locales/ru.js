@@ -529,6 +529,8 @@ export default {
   "None of your manga extensions has this manga.": "Ни в одном из ваших расширений для манги нет этой манги.",
   "Page {n} / {total}": "Страница {n} / {total}",
   "Pick the right series": "Выберите нужную серию",
+  "Prefer original groups": "Предпочитать оригинальные группы",
+  "When a group and a site that re-uploads it both have a chapter, read the group's own": "Если глава есть и у группы, и у сайта, который перезаливает её работы, читать главу группы",
   "Previous chapter": "Предыдущая глава",
   "Read chapter {n}": "Читать главу {n}",
   "Reading mode": "Режим чтения",

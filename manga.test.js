@@ -30,7 +30,15 @@ test('chapterRows: one per number, preferred language, oneshots last', () => {
 test('manga extension output: only well-formed results get through', () => {
   assert.deepEqual(cleanSeries([{ id: 5, title: 'X', cover: 'http://no', anilistId: 1.5 }, { title: 'no id' }, null]),
     [{ id: '5', title: 'X', cover: '', anilistId: null }])
-  assert.deepEqual(cleanChapters([{ id: 'c', number: -1, lang: 'EN', date: 'x' }]), [{ id: 'c', number: null, title: '', group: '', lang: 'en', date: null }])
+  assert.deepEqual(cleanChapters([{ id: 'c', number: -1, lang: 'EN', date: 'x', mirror: 'yes' }]), [{ id: 'c', number: null, title: '', group: '', lang: 'en', date: null, mirror: false }])
   assert.deepEqual(cleanPages(['https://a/1.png', 'javascript:alert(1)', 5]), ['https://a/1.png'])
   assert.deepEqual(cleanPages('nope'), [])
+})
+
+test('chapterRows: a mirror copy gives way to the group upload when asked, never to a better language', () => {
+  const c = (id, lang, date, mirror = false) => ({ id, number: 1, lang, date: new Date(date), mirror })
+  const list = [c('own', 'en', '2024-01-01'), c('copy', 'en', '2025-01-01', true), c('es', 'es', '2026-01-01')]
+  assert.equal(chapterRows(list, ['en', 'es'])[0].id, 'copy') // newest by default
+  assert.equal(chapterRows(list, ['en', 'es'], true)[0].id, 'own')
+  assert.equal(chapterRows([c('copy', 'en', '2025-01-01', true), c('es', 'es', '2026-01-01')], ['en', 'es'], true)[0].id, 'copy')
 })

@@ -1062,6 +1062,11 @@ async function mangaDetail (id) {
       delete grid.dataset.loaded
       return showTab('chapters')
     }
+    if (e.target.matches('[data-prefer-original]')) {
+      save('preferOriginal', e.target.checked)
+      delete $app.querySelector('[data-panel="chapters"]').dataset.loaded
+      return showTab('chapters')
+    }
     if (!e.target.matches('[data-chapters]')) return
     const n = Math.max(0, Math.min(total, Math.round(Number(e.target.value)) || 0))
     if (n > read) markWatched(m, n)
@@ -1095,7 +1100,10 @@ async function seriesFor (m) {
   const picked = load('mangaSources', {})[m.id]
   return results.find(r => r.ext === picked?.ext && r.id === picked?.id) ?? pickSeries(m, results)
 }
-const chaptersOf = series => once('chapters' + series.ext + series.id, () => ext.mangaChapters(series.ext, series.id, readLangs()).then(list => chapterRows(list, readLangs())))
+// rows picked from the series' whole list each time, so the "Prefer original groups" toggle needs no new download
+const preferOriginal = () => load('preferOriginal', true)
+const chapterListOf = series => once('chapters' + series.ext + series.id, () => ext.mangaChapters(series.ext, series.id, readLangs()))
+const chaptersOf = async series => chapterRows(await chapterListOf(series), readLangs(), preferOriginal())
 
 // The manga page's Chapters tab, drawn into el: the source picker, then a row per chapter; returns what was drawn
 async function chapterList (m, el) {
@@ -1103,16 +1111,20 @@ async function chapterList (m, el) {
   const { results, errors } = await seriesSearch(m)
   const series = await seriesFor(m)
   const picker = results.length
-    ? `<label class="ch-src"><span class="muted">${t('Source')}</span><select data-series>${series ? '' : `<option value="">${t('Pick the right series')}</option>`}${results.map((r, i) => `<option value="${i}" ${r === series ? 'selected' : ''}>${esc(r.title)} · ${esc(r.extName)}</option>`).join('')}</select></label>`
+    ? `<label class="ch-pick"><span class="muted">${t('Source')}</span><select data-series>${series ? '' : `<option value="">${t('Pick the right series')}</option>`}${results.map((r, i) => `<option value="${i}" ${r === series ? 'selected' : ''}>${esc(r.title)} · ${esc(r.extName)}</option>`).join('')}</select></label>`
     : ''
   if (!series) {
-    el.innerHTML = picker + `<p class="muted">${results.length ? t('Pick the right series') : t('None of your manga extensions has this manga.')}</p>${errors.map(x => `<p class="err">${esc(x)}</p>`).join('')}`
+    el.innerHTML = `<div class="ch-src">${picker}</div>` + `<p class="muted">${results.length ? t('Pick the right series') : t('None of your manga extensions has this manga.')}</p>${errors.map(x => `<p class="err">${esc(x)}</p>`).join('')}`
     return { results }
   }
   const rows = await chaptersOf(series)
   const read = chaptersRead(m)
   const next = rows.findIndex(r => r.number != null && r.number > read)
-  el.innerHTML = picker + (rows.map((r, i) => `<button class="ch-row ${r.number != null && r.number <= read ? 'read' : ''} ${i === next ? 'next' : ''}" data-chapter="${i}">
+  // only when some chapters are copies a mirror site re-uploaded
+  const toggle = (await chapterListOf(series)).some(c => c.mirror)
+    ? `<label class="ch-orig" title="${esc(t("When a group and a site that re-uploads it both have a chapter, read the group's own"))}"><input type="checkbox" data-prefer-original ${preferOriginal() ? 'checked' : ''}> ${t('Prefer original groups')}</label>`
+    : ''
+  el.innerHTML = `<div class="ch-src">${picker}${toggle}</div>` + (rows.map((r, i) => `<button class="ch-row ${r.number != null && r.number <= read ? 'read' : ''} ${i === next ? 'next' : ''}" data-chapter="${i}">
       <b>${r.number != null ? t('Chapter {n}', { n: r.number }) : esc(r.title || '—')}</b><span>${r.number != null ? esc(r.title) : ''}</span><span class="muted">${esc(r.group)}</span></button>`).join('') ||
     `<p class="muted">${t('Nothing here yet.')}</p>`)
   return { series, rows, results }

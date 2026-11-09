@@ -574,6 +574,8 @@ export default {
   "None of your manga extensions has this manga.": "Жодне з ваших розширень для манґи не має цієї манґи.",
   "Page {n} / {total}": "Сторінка {n} / {total}",
   "Pick the right series": "Виберіть правильну серію",
+  "Prefer original groups": "Надавати перевагу оригінальним групам",
+  "When a group and a site that re-uploads it both have a chapter, read the group's own": "Якщо розділ є і в групи, і на сайті, що перезаливає її роботи, читати розділ групи",
   "Previous chapter": "Попередній розділ",
   "Read chapter {n}": "Читати розділ {n}",
   "Reading mode": "Режим читання",

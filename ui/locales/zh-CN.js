@@ -529,6 +529,8 @@ export default {
   "None of your manga extensions has this manga.": "你的漫画扩展里都没有这部漫画。",
   "Page {n} / {total}": "第 {n} / {total} 页",
   "Pick the right series": "请选择正确的作品",
+  "Prefer original groups": "优先原汉化组",
+  "When a group and a site that re-uploads it both have a chapter, read the group's own": "当某一话同时出现在汉化组和转载其作品的网站上时，阅读汉化组自己的版本",
   "Previous chapter": "上一话",
   "Read chapter {n}": "阅读第 {n} 话",
   "Reading mode": "阅读模式",

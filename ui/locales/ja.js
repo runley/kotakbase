@@ -529,6 +529,8 @@ export default {
   "None of your manga extensions has this manga.": "このマンガがあるマンガ拡張機能はありません。",
   "Page {n} / {total}": "{n} / {total}ページ",
   "Pick the right series": "正しい作品を選んでください",
+  "Prefer original groups": "元のグループを優先",
+  "When a group and a site that re-uploads it both have a chapter, read the group's own": "グループと、その翻訳を再アップロードするサイトの両方に同じ話があるときは、グループ本家のものを読みます",
   "Previous chapter": "前の話",
   "Read chapter {n}": "第{n}話を読む",
   "Reading mode": "読み方",

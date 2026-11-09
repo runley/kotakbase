@@ -597,6 +597,9 @@ body.navigating::after { content: ''; position: fixed; top: 0; left: 0; width: 3
 /* manga page: the chapter list */
 .chapters { display: flex; flex-direction: column; gap: 6px; }
 .ch-src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.ch-pick, .ch-orig { display: flex; align-items: center; gap: 10px; }
+.ch-orig { font-size: 14px; color: var(--muted); cursor: pointer; }
+.ch-orig input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 .ch-src select { height: 36px; border: 0; border-radius: 10px; background: var(--panel); padding: 0 12px; max-width: 100%; }
 .ch-row { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--panel); text-align: left; }
 .ch-row:hover { background: var(--panel-2); }
