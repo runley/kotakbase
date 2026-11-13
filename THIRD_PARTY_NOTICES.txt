@@ -5,6 +5,8 @@ unmodified under their LGPL/GPL/MIT/ISC/Zlib/BSL licences; their source is at ht
 mpv, shipped as the separate program mpv.exe, is covered in licenses/mpv-NOTICE.txt.
 Electron and Chromium licences ship next to Kotakbase.exe (LICENSE.electron.txt, LICENSES.chromium.html).
 
+Filler episode tags come from AniFillerPedia (https://anifillerpedia.wiki), whose data is licensed CC BY-NC-SA 4.0.
+
 ================================================================================
 
 @silentbot1/nat-api@0.4.9

@@ -26,6 +26,8 @@ const head = `Kotakbase includes the following third-party software. Each is use
 JASSUB contains libass, FreeType, HarfBuzz, FriBidi and other libraries compiled to WebAssembly (ui/vendor/wasm), used
 unmodified under their LGPL/GPL/MIT/ISC/Zlib/BSL licences; their source is at https://github.com/ThaUnknown/jassub.
 mpv, shipped as the separate program mpv.exe, is covered in licenses/mpv-NOTICE.txt.
-Electron and Chromium licences ship next to Kotakbase.exe (LICENSE.electron.txt, LICENSES.chromium.html).`
+Electron and Chromium licences ship next to Kotakbase.exe (LICENSE.electron.txt, LICENSES.chromium.html).
+
+Filler episode tags come from AniFillerPedia (https://anifillerpedia.wiki), whose data is licensed CC BY-NC-SA 4.0.`
 writeFileSync('THIRD_PARTY_NOTICES.txt', [head, ...parts].join(`\n\n${'='.repeat(80)}\n\n`) + '\n')
 console.log(`THIRD_PARTY_NOTICES.txt: ${parts.length} packages`)

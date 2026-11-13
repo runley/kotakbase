@@ -931,6 +931,7 @@ async function detail (id) {
     <div class="grid" data-panel="similar" hidden></div>
   </div>`
   sharpen($app.querySelector('.show-banner'), m.id)
+  markFillers($app.querySelector('.eps'), m.id)
   // the open tab is kept in this page's history entry, so coming back to the page reopens it
   const showTab = tab => {
     history.replaceState({ ...history.state, tab }, '')
@@ -1362,6 +1363,36 @@ const aniZip = id => {
   return zipCache.get(id).promise
 }
 
+// AniFillerPedia (CC BY-NC-SA): episodes marked filler or mixed (part filler), by AniList id; unresearched ones get nothing
+const fillerCache = new Map()
+const FILLER_API = 'https://anifillerpedia.wiki/api/v1'
+const fillers = id => {
+  const hit = fillerCache.get(id)
+  if (!hit || Date.now() - hit.at > 3600 * 1000) {
+    fillerCache.set(id, {
+      at: Date.now(),
+      promise: (async () => {
+        const s = (await (await fetch(`${FILLER_API}/series?anilist_id=${id}`)).json()).items?.[0]
+        if (!s) return {}
+        const eps = await (await fetch(`${FILLER_API}/series/${s.id}/episodes`)).json()
+        return Object.fromEntries(eps.filter(e => e.status === 'filler' || e.status === 'mixed').map(e => [e.episode_number, e.status]))
+      })().catch(() => ({}))
+    })
+  }
+  return fillerCache.get(id).promise
+}
+// outlines filler episode cards and tags them under their summary once the data comes; the list never waits for it
+function markFillers (list, id) {
+  fillers(id).then(f => {
+    for (const [n, kind] of Object.entries(f)) {
+      const card = list?.querySelector(`.epc[data-ep="${n}"]`)
+      if (!card || card.classList.contains('filler')) continue
+      card.classList.add('filler', kind)
+      card.querySelector('small').insertAdjacentHTML('beforeend', `<span class="filler-tag" title="${t('From AniFillerPedia')}">${kind === 'mixed' ? t('Part filler') : t('Filler')}</span>`)
+    }
+  })
+}
+
 // whether a show continues another (a season 2, a part 2); unknown counts as yes, which changes nothing
 const hasPrequel = id => once('prequel' + id, () =>
   anilist('query($id: Int) { Media(id: $id) { relations { edges { relationType node { type } } } } }', { id })
@@ -1619,6 +1650,7 @@ async function episodeDrawer (m, playing) {
   }
   const list = drawer.querySelector('.ep-drawer-list')
   list.innerHTML = episodeCards(m, await aniZip(m.id), playing)
+  markFillers(list, m.id)
   list.querySelector('.epc.current')?.scrollIntoView({ block: 'center' })
 }
 
