@@ -343,6 +343,8 @@ export default {
   "Supernatural": "Табиғаттан тыс",
   "Surprise me": "Таңғалдыр",
   "Swedish": "Швед тілі",
+  "Rewatching": "Қайта көріп жатырсыз",
+  "Rewatched {n}×": "{n} рет қайта көрілді",
   "Ukrainian": "Украин тілі",
   "Kazakh": "Қазақ тілі",
   "Sync": "Синхрондау",

@@ -343,6 +343,8 @@ export default {
   "Supernatural": "Übernatürlich",
   "Surprise me": "Überrasch mich",
   "Swedish": "Schwedisch",
+  "Rewatching": "Wird erneut geschaut",
+  "Rewatched {n}×": "{n}× erneut geschaut",
   "Ukrainian": "Ukrainisch",
   "Kazakh": "Kasachisch",
   "Sync": "Sync",

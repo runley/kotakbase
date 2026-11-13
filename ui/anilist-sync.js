@@ -3,38 +3,48 @@
 // Signed out, none of this runs. The token lives in the main process (anilist-auth.js); this side maps, merges and
 // queues. The pure helpers are exported for the tests.
 //
-// An entry here is { status, progress, score }: AniList's status (PAUSED and REPEATING count as CURRENT), episodes
-// fully watched, and your 0-100 score (0 = none).
+// An entry here is { status, progress, score, repeat }: AniList's status (PAUSED counts as CURRENT), episodes fully
+// watched, your 0-100 score (0 = none) and how many times you rewatched it. A rewatch is REPEATING, its progress
+// counting from 0 again.
 
 import { t, language } from './i18n.js'
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
-const norm = status => status === 'PAUSED' || status === 'REPEATING' ? 'CURRENT' : status
-// an AniList entry as saved: { entryId, status, progress, score }
-const view = r => r ? { status: norm(r.status), progress: r.progress ?? 0, score: r.score ?? 0 } : null
-export const same = (a, b) => !a === !b && (!a || (a.status === b.status && a.progress === b.progress && a.score === b.score))
+const norm = status => status === 'PAUSED' ? 'CURRENT' : status
+// an AniList entry as saved: { entryId, status, progress, score, repeat }
+const view = r => r ? { status: norm(r.status), progress: r.progress ?? 0, score: r.score ?? 0, repeat: r.repeat ?? 0 } : null
+export const same = (a, b) => !a === !b && (!a || (a.status === b.status && a.progress === b.progress && a.score === b.score && a.repeat === b.repeat))
+// a rewatch starting on one side: its progress, counting from 0 again, wins over the other side's full count
+const rewatchProgress = (status, a, b) => status === 'REPEATING' && a.status !== b.status ? (a.status === 'REPEATING' ? a : b).progress : Math.max(a.progress, b.progress)
 
 // Kotakbase's state of one show as an entry; null when it has none. `show` (its details, if known) catches entries
 // saved before the `finished` flag existed, like the app's isFinished.
+// p.rewatch: replaying a finished show (AniList keeps it completed); p.repeating: a rewatch, from episode 1 watched
 export function localEntry (p, inList, score = 0, show) {
-  if (!p) return inList ? { status: 'PLANNING', progress: 0, score } : null
+  if (!p) return inList ? { status: 'PLANNING', progress: 0, score, repeat: 0 } : null
   const total = show?.episodes ?? show?.chapters
-  if (p.rewatch) return { status: 'COMPLETED', progress: Math.max(p.episode, total ?? 0), score } // rewatching: still completed
+  const repeat = p.repeat ?? 0
+  if (p.rewatch) return { status: 'COMPLETED', progress: Math.max(p.episode, total ?? 0), score, repeat } // replaying: still completed
   const ended = p.time >= (p.duration || 1) * 0.9 // its episode is watched too (the last one: the entry stays on it)
+  const progress = ended ? p.episode : p.episode - 1
+  if (p.repeating) return { status: 'REPEATING', progress, score, repeat }
   // finished: false = imported from AniList as CURRENT with every episode watched, which stays CURRENT there
   const finished = p.finished ?? (show?.status === 'FINISHED' && total && p.episode >= total && ended)
-  return { status: finished ? 'COMPLETED' : p.hidden ? 'DROPPED' : 'CURRENT', progress: ended ? p.episode : p.episode - 1, score }
+  return { status: finished ? 'COMPLETED' : p.hidden ? 'DROPPED' : 'CURRENT', progress, score, repeat }
 }
 
 // What Kotakbase saves for an entry that came from AniList (not PLANNING: that's Your List). `p` is the progress entry
 // already here; `episodes` the show's episode count, if known.
 export function toLocal (e, p, episodes) {
   const caughtUp = e.status === 'COMPLETED' || (episodes && e.progress >= episodes)
+  const repeating = e.status === 'REPEATING'
   const entry = caughtUp ? { episode: Math.max(1, e.progress), time: 1, duration: 1 } : { episode: e.progress + 1, time: 0, duration: 1 }
   if (!caughtUp && p?.episode === entry.episode) Object.assign(entry, { time: p.time, duration: p.duration }) // keep the spot in it
   entry.finished = e.status === 'COMPLETED' || (caughtUp ? false : undefined)
   if (entry.finished === undefined) delete entry.finished
   if (e.status === 'DROPPED') entry.hidden = true
+  if (repeating) entry.repeating = true
+  if (e.repeat) entry.repeat = e.repeat
   return entry
 }
 
@@ -48,10 +58,11 @@ export function merge (L, remote, base) {
   if (!R) return L && !same(L, B) ? L : null // not on AniList: send it, unless it was deleted there and is unchanged here
   if (!L) return same(R, B) ? null : R // not here: take it, unless it was taken off here and is unchanged there
   const pick = (k, tie) => L[k] === R[k] ? L[k] : B && R[k] === B[k] ? L[k] : B && L[k] === B[k] ? R[k] : tie
-  const progress = Math.max(L.progress, R.progress)
-  let status = pick('status', (R.progress > L.progress ? R : L).status)
+  // no base: a rewatch on either side is the newer state (it only follows a completion)
+  let status = pick('status', [L, R].some(x => x.status === 'REPEATING') ? 'REPEATING' : (R.progress > L.progress ? R : L).status)
+  const progress = rewatchProgress(status, L, R)
   if (status === 'PLANNING' && progress) status = 'CURRENT'
-  return { status, progress, score: pick('score', L.score || R.score) }
+  return { status, progress, score: pick('score', L.score || R.score), repeat: B && R.repeat !== B.repeat ? R.repeat : Math.max(L.repeat, R.repeat) } // the count: as changed on the site, else never lowered
 }
 
 // Pushing one show Kotakbase changed: the entry to save on AniList, 'delete', or null (nothing to send). Progress is
@@ -63,23 +74,27 @@ export function pushTarget (L, base, unwatch = false, live = base) {
   let T
   if (!L) {
     if (!R) return null
-    if (unwatch) T = { status: 'PLANNING', progress: 0, score: R.score } // every episode unmarked: kept as planned, never deleted
+    if (unwatch) T = { status: 'PLANNING', progress: 0, score: R.score, repeat: R.repeat } // every episode unmarked: kept as planned, never deleted
     else return R.status === 'PLANNING' ? 'delete' : null // taken off Your List before starting it: the only delete
   } else if (!R || unwatch) T = L
   else {
     const keep = k => B && L[k] === B[k] ? R[k] : L[k]
-    T = { status: keep('status'), progress: Math.max(L.progress, R.progress), score: keep('score') }
+    const status = keep('status')
+    // rewatches counted here since the last pull go on top of AniList's count now (it may have changed on the site);
+    // an entry here that lost its count never lowers it
+    T = { status, progress: rewatchProgress(status, L, R), score: keep('score'), repeat: R.repeat + Math.max(0, L.repeat - (B?.repeat ?? R.repeat)) }
     if (R.status === 'COMPLETED' && T.status === 'CURRENT') T.status = 'COMPLETED'
     if (T.status === 'PLANNING' && T.progress) T.status = 'CURRENT'
   }
   return same(T, R) ? null : T
 }
 
-// SaveMediaListEntry's arguments: PAUSED / REPEATING on AniList stay as they are; the score is sent only when it changed
+// SaveMediaListEntry's arguments: PAUSED on AniList stays as it is; the score and rewatch count are sent only when changed
 // (AniList keeps it in the user's own scoring format, so it may come back rounded)
 export function saveVars (mediaId, T, base) {
   const v = { mediaId, status: T.status === 'CURRENT' && norm(base?.status) === 'CURRENT' ? base.status : T.status, progress: T.progress }
   if (T.score !== (base?.score ?? 0)) v.scoreRaw = T.score
+  if ((T.repeat ?? 0) !== (base?.repeat ?? 0)) v.repeat = T.repeat
   return v
 }
 
@@ -96,10 +111,10 @@ export function nextDelay (status, retryAfter, fails) {
 }
 
 const LIST_QUERY = type => `query($userId: Int) { MediaListCollection(userId: $userId, type: ${type}) { lists { entries {
-  id mediaId status progress score(format: POINT_100) updatedAt media { episodes chapters isAdult } } } } }`
-const ENTRY_FIELDS = 'id mediaId status progress score(format: POINT_100)'
-const TYPES = { mediaId: 'Int', status: 'MediaListStatus', progress: 'Int', scoreRaw: 'Int' }
-const fromApi = e => ({ entryId: e.id, status: e.status, progress: e.progress ?? 0, score: e.score ?? 0 })
+  id mediaId status progress score(format: POINT_100) repeat updatedAt media { episodes chapters isAdult } } } } }`
+const ENTRY_FIELDS = 'id mediaId status progress score(format: POINT_100) repeat'
+const TYPES = { mediaId: 'Int', status: 'MediaListStatus', progress: 'Int', scoreRaw: 'Int', repeat: 'Int' }
+const fromApi = e => ({ entryId: e.id, status: e.status, progress: e.progress ?? 0, score: e.score ?? 0, repeat: e.repeat ?? 0 })
 
 // load/save: the app's; show(id): its cached details; native: window.native.anilist; onImported: redraw after a pull;
 // type: ANIME or MANGA (whose progress, list and ratings are the app's "manga:" keys); onAccount(first): signed in
@@ -262,8 +277,10 @@ export function createSync ({ type = 'ANIME', load, save, show, native, onImport
     for (const [id, T] of imports) {
       const L = localEntry(progress[id], list.includes(id), scores[id] ?? 0, show(id))
       if (T.status === 'PLANNING') { if (!list.includes(id)) list.push(id) } else if (progress[id]?.rewatch && T.status === 'COMPLETED') {
-        // rewatching here: AniList still saying completed doesn't take the rewatch's progress back
-      } else if (!L || L.status !== T.status || L.progress !== T.progress) {
+        // replaying here: AniList still saying completed doesn't take the replay's spot back
+        if (T.repeat) progress[id].repeat = T.repeat
+        else delete progress[id].repeat
+      } else if (!L || L.status !== T.status || L.progress !== T.progress || L.repeat !== T.repeat) {
         const e = remote.get(id)
         progress[id] = { ...toLocal(T, progress[id], e?.media?.episodes ?? e?.media?.chapters ?? show(id)?.episodes ?? show(id)?.chapters), at: Math.max(progress[id]?.at ?? 0, (e?.updatedAt ?? 0) * 1000) || Date.now() }
       }

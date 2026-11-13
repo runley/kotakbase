@@ -343,6 +343,8 @@ export default {
   "Supernatural": "超自然",
   "Surprise me": "随便看看",
   "Swedish": "瑞典语",
+  "Rewatching": "重温中",
+  "Rewatched {n}×": "重温 {n} 次",
   "Ukrainian": "乌克兰语",
   "Kazakh": "哈萨克语",
   "Sync": "同步",

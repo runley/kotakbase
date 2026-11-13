@@ -906,6 +906,8 @@ async function detail (id) {
           <span class="pill">${esc(status)}</span>
           ${m.season ? `<span class="pill">${esc(SEASON[m.season] ? t(SEASON[m.season]) : m.season)} ${m.seasonYear}</span>` : ''}
           ${m.averageScore ? `<span class="pill score">${m.averageScore}%</span>` : ''}
+          ${p?.repeating ? `<span class="pill">${t('Rewatching')}</span>` : ''}
+          ${p?.repeat ? `<span class="pill">${t('Rewatched {n}×', { n: p.repeat })}</span>` : ''}
         </div>
         <p class="show-desc">${esc(plain(m.description))}</p>
       </div>
@@ -962,7 +964,10 @@ async function detail (id) {
       return route()
     }
     if (e.target.closest('[data-hide-continue]')) {
-      save('progress', { ...progress(), [m.id]: { ...progress()[m.id], hidden: true } })
+      const p = progress()[m.id]
+      // a rewatch given up: completed again (not dropped, not counted)
+      if (p.repeating) save('progress', { ...progress(), [m.id]: { episode: Math.max(p.episode, epCount(m)), time: 1, duration: 1, finished: true, repeat: p.repeat, at: Date.now() } })
+      else save('progress', { ...progress(), [m.id]: { ...p, hidden: true } })
       return route()
     }
     // seen elsewhere: counts as finished, so it leaves Continue Watching and Recommended and feeds Recommended instead;
@@ -1685,6 +1690,7 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
   if (room && !room.isHost() && !fromRoom) return notHost()
   if (manga) setMode(false, false) // playing saves anime progress (a room's host can start this from any page)
   let logged = false // one history entry per playback
+  let counted = false // a rewatch ending is counted once, though the last episode keeps saving past 90%
   rememberSource(m, result)
   if (fileIndex == null && PICK_FILE_FORMATS.includes(m.format)) {
     fileIndex = await chooseFile(m, result.link)
@@ -1722,10 +1728,19 @@ async function play (m, episode, result, numbering, fileIndex, fromRoom = false)
       if (watched && !logged) { logged = true; logWatched(m, episode, last) }
       // the last episode watched is saved as played to the end, so everything reading the saved time agrees it's watched
       const entry = watched && !last ? { episode: episode + 1, time: 0, duration: 1 } : { episode, time: watched ? duration : time, duration }
+      const prev = progress()[m.id]
+      if (prev?.repeat) entry.repeat = prev.repeat
+      // a rewatch: episode 1 of a show you'd finished, watched again, makes it Rewatching on AniList; its last episode
+      // counts the rewatch and completes it again
+      if (prev?.repeating || (watched && episode === 1 && !counted && (isFinished(m) || prev?.rewatch))) {
+        if (watched && last && !counted) {
+          counted = true
+          Object.assign(entry, { finished: true, repeat: (prev?.repeat ?? 0) + 1 })
+        } else entry.repeating = true
       // the final episode of a show that has finished airing: it leaves Continue Watching
-      if (watched && last && m.status === 'FINISHED') entry.finished = true
-      // watching a show you'd finished again: it stays in Continue Watching, and AniList keeps it completed
-      else if (isFinished(m) || progress()[m.id]?.rewatch) entry.rewatch = true
+      } else if (watched && last && m.status === 'FINISHED') entry.finished = true
+      // replaying an episode of a show you'd finished: it stays in Continue Watching, and AniList keeps it completed
+      else if (isFinished(m) || prev?.rewatch) entry.rewatch = true
       save('progress', { ...progress(), [m.id]: { ...entry, at: Date.now() } })
     },
     onPrev: () => sources(m, episode - 1),

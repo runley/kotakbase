@@ -3,8 +3,8 @@ import test from 'node:test'
 import { localEntry, toLocal, merge, pushTarget, saveVars, queue, dequeue, nextDelay, GAP } from './ui/anilist-sync.js'
 import { parseRedirect, REDIRECT } from './anilist-auth.js'
 
-const e = (status, progress, score = 0) => ({ status, progress, score })
-const remote = (status, progress, score = 0) => ({ entryId: 9, status, progress, score })
+const e = (status, progress, score = 0, repeat = 0) => ({ status, progress, score, repeat })
+const remote = (status, progress, score = 0, repeat = 0) => ({ entryId: 9, status, progress, score, repeat })
 
 test('localEntry: Kotakbase → AniList', () => {
   assert.equal(localEntry(undefined, false), null)
@@ -135,4 +135,40 @@ test('rewatching a finished show: AniList keeps it completed, and nothing pulls 
   assert.deepEqual(merge(L, done, done), L) // a pull: the same, so nothing is imported over the rewatch
   assert.equal(pushTarget(L, done, false, done), null) // nothing sent
   assert.deepEqual(pushTarget(e('COMPLETED', 12, 95), done, false, done), e('COMPLETED', 12, 95)) // a new rating still goes
+})
+
+test('a rewatch: Rewatching from episode 1, counted when it ends, and back to completed when given up', () => {
+  const show = { status: 'FINISHED', episodes: 25 }
+  const done = remote('COMPLETED', 25, 90, 1)
+  // episode 1 watched again: Rewatching on AniList, its progress counting from 1, not kept at 25
+  const L = localEntry({ episode: 2, time: 0, duration: 1, repeating: true, repeat: 1 }, false, 90, show)
+  assert.deepEqual(L, e('REPEATING', 1, 90, 1))
+  assert.deepEqual(pushTarget(L, done, false, done), e('REPEATING', 1, 90, 1))
+  assert.equal(saveVars(1, L, done).status, 'REPEATING')
+  // a pull meanwhile doesn't put it back to 25
+  assert.deepEqual(merge(L, done, done), L)
+  // on through the rewatch: progress goes up as usual
+  const mid = remote('REPEATING', 5, 90, 1)
+  assert.deepEqual(pushTarget(e('REPEATING', 6, 90, 1), mid, false, mid), e('REPEATING', 6, 90, 1))
+  // the last episode: completed again, one more rewatch on top of AniList's count as it is now (2 set on the site since)
+  const T = pushTarget(e('COMPLETED', 25, 90, 2), mid, false, remote('REPEATING', 24, 90, 2))
+  assert.deepEqual(T, e('COMPLETED', 25, 90, 3))
+  assert.equal(saveVars(1, T, remote('REPEATING', 24, 90, 2)).repeat, 3)
+  assert.equal(saveVars(1, e('REPEATING', 6, 90, 1), mid).repeat, undefined) // unchanged: not sent
+  // given up (removed from Continue Watching): completed again, not dropped, and not counted
+  assert.deepEqual(pushTarget(e('COMPLETED', 25, 90, 1), mid, false, mid), e('COMPLETED', 25, 90, 1))
+})
+
+test('a rewatch started or counted on AniList\'s site comes here', () => {
+  // set to Rewatching there: Continue Watching picks it up at the rewatch's next episode
+  const R = remote('REPEATING', 3, 0, 1)
+  const T = merge(e('COMPLETED', 25), R, remote('COMPLETED', 25))
+  assert.deepEqual(T, e('REPEATING', 3, 0, 1))
+  assert.deepEqual(toLocal(T), { episode: 4, time: 0, duration: 1, repeating: true, repeat: 1 })
+  assert.deepEqual(localEntry(toLocal(T)), T)
+  // first sync, no base: the rewatch is the newer state
+  assert.deepEqual(merge(e('COMPLETED', 25), R, null), e('REPEATING', 3, 0, 1))
+  // the count changed on the site: taken here
+  assert.deepEqual(merge(e('COMPLETED', 25, 0, 1), remote('COMPLETED', 25, 0, 4), remote('COMPLETED', 25, 0, 1)), e('COMPLETED', 25, 0, 4))
+  assert.deepEqual(toLocal(e('COMPLETED', 25, 0, 4)), { episode: 25, time: 1, duration: 1, finished: true, repeat: 4 })
 })
