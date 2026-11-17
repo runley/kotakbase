@@ -1,6 +1,6 @@
 import * as ext from './extensions.js'
 import * as player from './player.js'
-import { parseRelease, releaseTags, audioLanguages, subLanguages, rankByLanguage, pickAuto, forThisEntry, otherEntryWords, unplayableAudio, entryNumbers } from './release.js'
+import { parseRelease, releaseTags, audioLanguages, subLanguages, rankByLanguage, pickAuto, forThisEntry, otherEntryWords, unplayableAudio, entryNumbers, withTvdbNumbers } from './release.js'
 import { LANGS, SIGNS } from './lang.js'
 import { fromMal, malAnime } from './mal.js'
 import { createSync } from './anilist-sync.js'
@@ -1401,7 +1401,7 @@ const hasPrequel = id => once('prequel' + id, () =>
 async function mappings (id, episode) {
   try {
     const res = await aniZip(id)
-    let ep = res.episodes?.[episode] ?? {}
+    let ep = withTvdbNumbers(res.episodes, episode)
     const mp = res.mappings ?? {}
     // A franchise's first season starts at episode 1. An offset there is the database counting an extra TVDB episode
     // (Food Wars: episode 1 mapped to S01E02), so its own number is used, and no TVDB episode id

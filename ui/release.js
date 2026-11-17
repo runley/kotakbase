@@ -168,3 +168,16 @@ export function entryNumbers (titles) {
   }
   return { season, part }
 }
+
+// ani.zip's episode for an entry, with its TVDB season, season episode and series-wide number worked out from the
+// nearest episode that has them when it has none (ani.zip leaves gaps: Stone Ocean Part 2 maps only its episode 12,
+// and its episodes 13-26 not at all). Without them a pack numbering the whole season plays the wrong file.
+// shortcut: assumes the gap doesn't cross a TVDB season boundary; fine for a single AniList entry in practice.
+export function withTvdbNumbers (episodes = {}, episode) {
+  const ep = episodes[episode] ?? {}
+  if (ep.seasonNumber != null) return ep
+  const ref = Object.entries(episodes).filter(([k, e]) => /^\d+$/.test(k) && e.seasonNumber != null && e.episodeNumber != null)
+    .map(([k, e]) => ({ d: episode - Number(k), e })).sort((a, b) => Math.abs(a.d) - Math.abs(b.d))[0]
+  if (!ref) return ep
+  return { ...ep, seasonNumber: ref.e.seasonNumber, episodeNumber: ref.e.episodeNumber + ref.d, absoluteEpisodeNumber: ref.e.absoluteEpisodeNumber == null ? undefined : ref.e.absoluteEpisodeNumber + ref.d }
+}

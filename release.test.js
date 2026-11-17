@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseRelease, releaseTags, audioLanguages, subLanguages, rankByLanguage, pickAuto, forThisEntry, otherEntryWords, unplayableAudio, entryNumbers, seasonsNamed } from './ui/release.js'
+import { parseRelease, releaseTags, audioLanguages, subLanguages, rankByLanguage, pickAuto, forThisEntry, otherEntryWords, unplayableAudio, entryNumbers, seasonsNamed, withTvdbNumbers } from './ui/release.js'
 
 test('audioLanguages', () => {
   const langs = (...t) => [...audioLanguages(t)].sort()
@@ -188,4 +188,13 @@ test('seasonsNamed: the seasons a release names', () => {
   const titles = ['[VCB-Studio] Slime 10-bit 1080p HEVC BDRip [S1 Reseed + OAD Reseed + S2 Reseed + MOVIE + WEB + S3]', 'Show (Season 1+2+OVA)', 'Show Season 1-3', 'Show S01~S03', 'Show 2nd Season', 'Show.S02E05.1080p', 'Show S04E11 (2nd Season Part 2)', 'Show - 05 (1080p)']
   const expected = [[1, 2, 3], [1, 2], [1, 2, 3], [1, 2, 3], [2], [2], [4], []]
   titles.forEach((t, i) => assert.deepEqual(seasonsNamed(t).sort(), expected[i], t))
+})
+
+test('withTvdbNumbers: gaps in ani.zip are numbered from the nearest mapped episode', () => {
+  // Stone Ocean Part 2: only episode 12 is mapped (S05E24, series-wide 176); a Stone Ocean pack numbers files 01-38
+  const eps = { 1: { episode: '1' }, 12: { seasonNumber: 5, episodeNumber: 24, absoluteEpisodeNumber: 176, tvdbId: 9 }, S1: { seasonNumber: 0, episodeNumber: 1 } }
+  assert.deepEqual(withTvdbNumbers(eps, 1), { episode: '1', seasonNumber: 5, episodeNumber: 13, absoluteEpisodeNumber: 165 })
+  assert.deepEqual(withTvdbNumbers(eps, 26), { seasonNumber: 5, episodeNumber: 38, absoluteEpisodeNumber: 190 })
+  assert.equal(withTvdbNumbers(eps, 12), eps[12]) // mapped: as it is
+  assert.deepEqual(withTvdbNumbers({ 1: { episode: '1' } }, 1), { episode: '1' }) // nothing mapped: nothing guessed
 })
