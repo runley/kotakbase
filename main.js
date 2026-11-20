@@ -98,8 +98,10 @@ ipcMain.on('discord', (_, now) => discord.set(now))
 // uncaught error still shows Electron's usual error box.
 const isClosedPeer = err => err?.name === 'OperationError' || err?.code === 'ERR_DATA_CHANNEL' || /webrtc-polyfill|simple-peer/.test(err?.stack ?? '')
 // WebTorrent 3.0.21 (latest) answers a peer's piece request that arrives just after its torrent was removed, reading
-// from the torrent's storage that removal already released ("reading 'get'" of null). That torrent is gone, so: logged.
-const isRemovedTorrentRequest = err => err instanceof TypeError && /reading 'get'/.test(err.message) && /webtorrent[\\/]lib[\\/]torrent\.js/.test(err.stack ?? '')
+// from the torrent's storage that removal already released ("reading 'get'" of null); and a peer timing out just after
+// its torrent was removed logs through the client that removal cleared ("reading '_debugId'" of null). That torrent
+// is gone, so: logged.
+const isRemovedTorrentRequest = err => err instanceof TypeError && /reading '(get|_debugId)'/.test(err.message) && /webtorrent[\\/]lib[\\/]torrent\.js/.test(err.stack ?? '')
 process.on('uncaughtException', err => {
   if (isClosedPeer(err)) return console.warn('WebRTC peer closed:', err.message)
   if (isRemovedTorrentRequest(err)) return console.warn('Piece request for a removed torrent ignored')
